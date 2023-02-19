@@ -3,7 +3,8 @@
 sw,sh=128,128
 cx,cy=sw/2,sh/2
 f=0
-bgc=5
+c_bg=9 -- bg color
+c_sd=5 -- shadow color
 
 
 
@@ -12,23 +13,56 @@ bgc=5
 
 -- 원과 벽의 충돌 처리
 function bouncing_wall(c,w,h)
-	if(c.x<c.r) c.sx*=-1 c.x+=(c.r-c.x)*2 c.is_hit=true
-	if(c.x>w-c.r) c.sx*=-1 c.x-=(c.r-(w-c.x))*2  c.is_hit=true
-	if(c.y<c.r) c.sy*=-1 c.y+=(c.r-c.y)*2  c.is_hit=true
-	if(c.y>h-c.r) c.sy*=-1 c.y-=(c.r-(h-c.y))*2  c.is_hit=true
+	if(c.x<c.r) c.sx*=-1 c.x+=(c.r-c.x)*2 c.hit_c=3
+	if(c.x>w-c.r) c.sx*=-1 c.x-=(c.r-(w-c.x))*2  c.hit_c=3
+	if(c.y<c.r) c.sy*=-1 c.y+=(c.r-c.y)*2  c.hit_c=3
+	if(c.y>h-c.r) c.sy*=-1 c.y-=(c.r-(h-c.y))*2  c.hit_c=3
 end
 
 -- 원과 점의 충돌 처리
 -- (TODO: 정확한 충돌지점으로 되돌리는 추가 처리 필요)
 function bouncing_point(c,px,py)
+	-- [정확히 충돌한 시점으로 되돌리기]
+	-- 현재 좌표의 거리, 1프레임 전 좌표간 거리, 반지름의 합을 활용해서 실제 충돌 지점을 산출한다.
+	-- 두 원을 그 지점으로 옮긴 후 교환된 속도값을 일부 더해서 현재 프레임에 실제로 있어야 할 위치로 옮긴다.
+	local dist_now=sqrt((c.x-px)^2+(c.y-py)^2)
+	local old_dx=(c.x-c.sx)-px
+	local old_dy=(c.y-c.sy)-py
+	local dist_old=sqrt(old_dx*old_dx+old_dy*old_dy)
+
+
+	-- 정확한 충돌 시점 상황으로 돌아간다
+	local a_hit=nil -- 원과 점의 충돌 방향
+	local r_to_hit=0
+	if dist_old>dist_now and dist_old>c.r then
+		local t1=c.r-dist_old
+		local t2=dist_now-dist_old
+		r_to_hit=1-t1/t2 -- 현재 프레임에서 충돌 시점까지의 시간 비율(0.2라면 [현재 프레임-0.2프레임]에 충돌한 것)
+
+		-- 원을 충돌 시점 좌표로 옮겨준다
+		c.x-=c.sx*r_to_hit
+		c.y-=c.sy*r_to_hit
+		dx,dy=c.x-px,c.y-py -- 거리 재계산(저 아래에서 다시 사용)
+	end
+
+
 	local spd=sqrt(c.sx^2+c.sy^2)
 	local spd_a=atan2(c.sx,c.sy)
 	local hit_a=atan2(px-c.x,py-c.y)
 	local next_a=hit_a+(hit_a-spd_a)+0.5
 	c.sx=cos(next_a)*spd
 	c.sy=sin(next_a)*spd
-	c.is_hit=true
+	c.hit_c=3
 end
+--[[ function bouncing_point(c,px,py)
+	local spd=sqrt(c.sx^2+c.sy^2)
+	local spd_a=atan2(c.sx,c.sy)
+	local hit_a=atan2(px-c.x,py-c.y)
+	local next_a=hit_a+(hit_a-spd_a)+0.5
+	c.sx=cos(next_a)*spd
+	c.sy=sin(next_a)*spd
+	c.hit_c=3
+end ]]
 
 -- 원과 박스의 충돌 처리
 function bouncing_boxes(c)
@@ -41,11 +75,11 @@ function bouncing_boxes(c)
 				if c.x<x1 and c.x+c.r>x1 then
 					c.sx*=-1
 					c.x-=(c.x+c.r-x1)*2
-					c.is_hit=true
+					c.hit_c=3
 				elseif c.x>x2 and c.x-c.r<x2 then
 					c.sx*=-1
 					c.x+=(x2-c.x+c.r)*2
-					c.is_hit=true
+					c.hit_c=3
 				end
 			elseif c.y<=y1 then -- 상단 모서리
 				if c.x<=x1 then -- 좌상
@@ -66,11 +100,11 @@ function bouncing_boxes(c)
 			if c.y<y1 and c.y+c.r>y1 then
 				c.sy*=-1
 				c.y-=(c.y+c.r-y1)*2
-				c.is_hit=true
+				c.hit_c=3
 			elseif c.y>y2 and c.y-c.r<y2 then
 				c.sy*=-1
 				c.y+=(y2-c.y+c.r)*2
-				c.is_hit=true
+				c.hit_c=3
 			end
 		end
 	end
@@ -84,8 +118,8 @@ function circ_collision(c1,c2)
 	local dd=dx*dx+dy*dy
 	if(dd>rr*rr) return -- 거리가 두 원의 반지름 합보다 짧아야 충돌(제곱근 사용하지 않고 판정부터 빠르게 처리)
 	
-	c1.is_hit=true
-	c2.is_hit=true
+	c1.hit_c=3
+	c2.hit_c=3
 
 	-- [정확히 충돌한 시점으로 되돌리기]
 	-- 현재 좌표의 거리, 1프레임 전 좌표간 거리, 반지름의 합을 활용해서 실제 충돌 지점을 산출한다.
@@ -179,21 +213,25 @@ function draw_dot_line(x,y,angle,min,max)
 		local len2=len1+dot1
 		x1,y1=x+dx*len1,y+dy*len1
 		pset(x1+1.5,y1+1.5,0)
-		pset(x1,y1,11)
+		pset(x1,y1,10)
 	end
 	-- 꽁다리 원
 	x1,y1=x+dx*(max+2),y+dy*(max+2)
 	circfill(x1+1.5,y1+1.5,2,0)
-	circfill(x1,y1,2,11)
+	circfill(x1,y1,2,10)
 end
 
--- 정사각형 초록 큐브 그리기
+-- 정사각형 큐브 그리기
 function draw_cube_7x7(x,y)
+	local c1,c2,c3=3,6,11 -- 초록
+	-- local c1,c2,c3=5,13,12 -- 보라
+	-- c1,c2,c3=8,14,15 -- 주황
+
 	local x2,y2=x+6,y+6
-	rectfill(x,y,x2,y2,6)
+	rectfill(x,y,x2,y2,c2)
 	for i=0,2 do
-		line(x+i,y+i,x2-i,y+i,11)
-		line(x+i,y2-i,x2-i,y2-i,3)
+		line(x+i,y+i,x2-i,y+i,c3)
+		line(x+i,y2-i,x2-i,y2-i,c1)
 	end
 	line(x2+1,y,x2+1,y2+1,0)
 	line(x,y2+1,x2+1,y2+1,0)
@@ -233,18 +271,18 @@ end
 -- 게임
 
 function _init()
-	cls(bgc)
+	cls(c_bg)
 	copyprevframe()
 
 	-- 구슬 색상 세트
 	local colors={}
-	colors[1]={3,6,11,9} -- 녹색(어두운,중간,하이라이트,이동자국)
-	colors[2]={8,14,15,4} -- 주황색
-	colors[3]={2,13,12,0} -- 포도색
+	colors[1]={3,6,11,6} -- 녹색(어두운,중간,하이라이트,이동자국)
+	colors[2]={8,14,15,8} -- 주황색
+	colors[3]={2,13,12,5} -- 포도색
 
 	-- 구슬 여럿 추가
 	circles={}
-	for i=1,10 do
+	for i=1,0 do
 		local c={}
 		c.x=14+(i-1)%5*24
 		c.y=20+flr((i-1)/5)*30
@@ -253,20 +291,31 @@ function _init()
 		local dir,spd=rnd(),1.6+i*0.1
 		c.sx=cos(dir)*spd
 		c.sy=sin(dir)*spd
-		c.is_hit=false
+		c.hit_c=0
 		add(circles,c)
 	end
-	-- add(circles,{x=25,y=20,r=5,sx=0.5,sy=0.75,c={8,14,15,4}})
-	-- add(circles,{x=60,y=20,r=5,sx=-0.4,sy=0.75,c={8,14,15,4}})
-	-- add(circles,{x=68,y=70,r=5,sx=1.4,sy=0.4,c={8,14,15,4}})
-	-- add(circles,{x=120,y=64,r=5,sx=-0.8,sy=1.1,c={8,14,15,4}})
-	-- add(circles,{x=25,y=110,r=5,sx=0.8,sy=-1.1,c={8,14,15,4}})
-	-- add(circles,{x=61,y=103,r=5,sx=-1.1,sy=-1.5,c={8,14,15,4}})
-
+	add(circles,{x=12,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[1]})
+	-- add(circles,{x=48,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2]})
+	add(circles,{x=74,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=84,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=84,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=94,y=64-12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=94,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2]})
+	add(circles,{x=94,y=64+12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=104,y=64-18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=104,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=104,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=104,y=64+18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	
 	-- 박스 추가
 	boxes={}
-	add(boxes,{40,40,48,88})
-	add(boxes,{80,80,104,104})
+	add(boxes,{64,40,72,48})
+	add(boxes,{72,32,80,40})
+	add(boxes,{64,80,72,88})
+	add(boxes,{72,88,80,96})
+	add(boxes,{80,24,112,32})
+	add(boxes,{80,96,112,104})
+	
 
 	-- 팔레트는 보너스 색상과 섞어서 사용
 	-- https://www.lexaloffle.com/bbs/?pid=68190#p
@@ -294,19 +343,19 @@ function _update60()
 		end
 		c.x+=c.sx
 		c.y+=c.sy
-		if(c.sx!=0) c.sx=abs(c.sx)<0.05 and 0 or c.sx*0.985
-		if(c.sy!=0) c.sy=abs(c.sy)<0.05 and 0 or c.sy*0.985
+		if(c.sx!=0) c.sx=abs(c.sx)<0.05 and 0 or c.sx*0.988
+		if(c.sy!=0) c.sy=abs(c.sy)<0.05 and 0 or c.sy*0.988
 
 		-- (테스트) 완전히 멈추면 테두리 밝게
-		-- if(c.sx==0 and c.sy==0) c.is_hit=true
+		-- if(c.sx==0 and c.sy==0) c.hit_c=3
 	end
 	
 	-- Z누르면 초록공 치기
 	if btn(4) then
 		if not kick then
 			kick=true
-			circles[1].sx=cos(kick_a)*3
-			circles[1].sy=sin(kick_a)*3
+			circles[1].sx=cos(kick_a)*4
+			circles[1].sy=sin(kick_a)*4
 		end
 	else kick=false end
 
@@ -324,17 +373,17 @@ function _update60()
 end
 
 function _draw()
-	cls(bgc)
+	cls(c_bg)
 
 	-- 이동 자국
 	-- 이전 프레임의 자국을 붙여넣은 후 배경색 원, 점을 그려서 조금씩 지우는 방식
 	pasteprevframe()
 	for c in all(circles) do
-		circfill(c.x,c.y,c.r*0.7,c.c[4])
+		circfill(c.x,c.y,c.r*0.8,c.c[4])
 	end
 	for i=0,80 do
-		if(i<15) circfill(rnd(sw),rnd(sh),2,bgc)
-		pset(rnd(sw),rnd(sh),bgc)
+		if(i<20) circfill(rnd(sw),rnd(sh),i<8 and 2 or 1,c_bg)
+		pset(rnd(sw),rnd(sh),c_bg)
 	end
 	copyprevframe()
 
@@ -351,30 +400,38 @@ function _draw()
 	-- end
 
 	-- 배경 격자 X 패턴
-	for i=0,143 do
-		local x=i%12*10+6
-		local y=i\12*10+6
-		line(x,y,x+4,y+4,0)
-		line(x+4,y,x,y+4,0)
+	-- for i=0,143 do
+	-- 	local x=i%12*10+6
+	-- 	local y=i\12*10+6
+	-- 	line(x,y,x+4,y+4,c_sd)
+	-- 	line(x+4,y,x,y+4,c_sd)
+	-- end
+
+	-- 배경 패턴
+	for i=0,287 do
+		local x=i%12*10+5
+		local y=i\12*5+5
+		if i\12%2==0 then line(x,y,x+2,y+2,c_sd)
+		else x+=7 line(x,y,x-2,y+2,c_sd) end
 	end
 
 	-- 구슬 그림자
 	for c in all(circles) do
-		circfill(c.x+c.r*0.38,c.y+c.r*0.38,c.r*0.87,0)
+		circfill(flr(c.x+2.5),flr(c.y+2.5),c.r-0.5,c_sd)
 	end
 
 	-- 박스+그림자
 	for b in all(boxes) do
 		local x1,y1,x2,y2=b[1],b[2],b[3],b[4]
 		-- 전체 그림자
-		pset(x2+1,y1+1,0)
-		pset(x1+1,y2+1,0)
-		local d=3
+		pset(x2+1,y1+1,c_sd)
+		pset(x1+1,y2+1,c_sd)
+		local d=2
 		for i=1,d do
-			line(x2+1,y1+1+i,x2+1+i,y1+1+i,0)
-			line(x1+1+i,y2+1,x1+1+i,y2+1+i,0)
+			line(x2+1,y1+1+i,x2+1+i,y1+1+i,c_sd)
+			line(x1+1+i,y2+1,x1+1+i,y2+1+i,c_sd)
 		end
-		rectfill(x1+d+2,y1+d+2,x2+d+2,y2+d+2,0)
+		rectfill(x1+d+2,y1+d+2,x2+d+2,y2+d+2,c_sd)
 		-- 박스
 		for i=0,(x2-x1)\8-1 do
 			for j=0,(y2-y1)\8-1 do
@@ -386,24 +443,26 @@ function _draw()
 
 	-- 구슬 그리기
 	for c in all(circles) do
-		local x,y=c.x,c.y
-		circfill(x,y,c.r,c.c[1])
-		circfill(x-1,y-1,3,c.c[2])
-		line(x-3,y-2,x-1,y-2,c.c[3])
-		line(x-2,y-3,x-2,y-1,c.c[3])
-		pset(x-2,y-2,7)
-		circ(x,y,c.r,c.is_hit and c.c[3] or 0) -- outline
-		c.is_hit=false
+		local x,y=flr(c.x+0.5),flr(c.y+0.5)
+		
+		-- 충돌하면 색을 밝게
+		local c1,c2,c3,c4=c.c[1],c.c[2],c.c[3],0
+		if c.hit_c>2 then c1,c2,c3,c4=c.c[3],c.c[3],7,c.c[2]
+		elseif c.hit_c>0 then c1,c2,c3,c4=c.c[2],c.c[3],7,0 end
+		
+		circfill(x,y,c.r,c4) -- outline
+		circfill(x,y,c.r-1,c1)
+		circfill(x-1,y-1,c.r-2,c2)
+		line(x-3,y-2,x-1,y-2,c3)
+		line(x-2,y-3,x-2,y-1,c3)
+		
+		if(c.hit_c>0) c.hit_c-=1
 	end
 
 	-- 구슬 칠 방향 그리기
 	if kick_ready and f%2==0 then
 		local c=circles[1]
 		draw_dot_line(c.x,c.y,kick_a,2,60)
-		-- local dx=cos(kick_a-0.25)*(c.r-1)
-		-- local dy=sin(kick_a-0.25)*(c.r-1)
-		-- draw_dot_line(c.x+dx,c.y+dy,kick_a,4,60)
-		-- draw_dot_line(c.x-dx,c.y-dy,kick_a,4,60)
 	end
 
 	-- draw_color_table()

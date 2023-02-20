@@ -6,7 +6,18 @@ f=0
 c_bg=9 -- bg color
 c_sd=5 -- shadow color
 
-
+-------------------------------------------------------------------------------
+-- log
+log_txt={}
+function print_log()
+	if(#log_txt<=0) return nil
+	for i=#log_txt,max(1,#log_txt-15),-1 do
+		print(log_txt[i],4,4+(#log_txt-i)*7,14)
+	end
+end
+function log(s) add(log_txt,s) end
+-- log (끝)
+-------------------------------------------------------------------------------
 
 -------------------------------------------------------------------------------
 -- 물리 처리
@@ -20,21 +31,19 @@ function bouncing_wall(c,w,h)
 end
 
 -- 원과 점의 충돌 처리
--- (TODO: 정확한 충돌지점으로 되돌리는 추가 처리 필요)
 function bouncing_point(c,px,py)
-	-- [정확히 충돌한 시점으로 되돌리기]
-	-- 현재 좌표의 거리, 1프레임 전 좌표간 거리, 반지름의 합을 활용해서 실제 충돌 지점을 산출한다.
-	-- 두 원을 그 지점으로 옮긴 후 교환된 속도값을 일부 더해서 현재 프레임에 실제로 있어야 할 위치로 옮긴다.
-	local dist_now=sqrt((c.x-px)^2+(c.y-py)^2)
-	local old_dx=(c.x-c.sx)-px
-	local old_dy=(c.y-c.sy)-py
-	local dist_old=sqrt(old_dx*old_dx+old_dy*old_dy)
+	if((px-c.x)^2+(py-c.y)^2>c.r^2) return nil
 
+	-- [정확히 충돌한 시점으로 되돌리기]
+	-- 현재 좌표의 거리, 1프레임 전 좌표간 거리, 거리를 활용해서 실제 충돌 지점을 산출한다.
+	-- 원을 그 지점으로 옮긴 후 현재 프레임에 실제로 있어야 할 위치로 옮긴다.
+	local dist_now=sqrt((c.x-px)^2+(c.y-py)^2)
+	local dist_old=sqrt(((c.x-c.sx)-px)^2+((c.y-c.sy)-py)^2)
 
 	-- 정확한 충돌 시점 상황으로 돌아간다
 	local a_hit=nil -- 원과 점의 충돌 방향
 	local r_to_hit=0
-	if dist_old>dist_now and dist_old>c.r then
+	if dist_old>dist_now and dist_old>c.r then -- 이전 프레임에 충돌 거리보다 멀다면?
 		local t1=c.r-dist_old
 		local t2=dist_now-dist_old
 		r_to_hit=1-t1/t2 -- 현재 프레임에서 충돌 시점까지의 시간 비율(0.2라면 [현재 프레임-0.2프레임]에 충돌한 것)
@@ -42,27 +51,32 @@ function bouncing_point(c,px,py)
 		-- 원을 충돌 시점 좌표로 옮겨준다
 		c.x-=c.sx*r_to_hit
 		c.y-=c.sy*r_to_hit
-		dx,dy=c.x-px,c.y-py -- 거리 재계산(저 아래에서 다시 사용)
+	else
+		-- 이전 프레임도 충돌 거리보다 가깝다면?
+		-- 강제로 멀리 밀어준다(정석은 아니지만 대충 퉁치자)
+		local push_dist=c.r-dist_now -- 밀어내야할 거리
+		a_hit=atan2(px-c.x,py-c.y)
+		c.x-=cos(a_hit)*push_dist
+		c.y-=sin(a_hit)*push_dist
+
+		-- debug: 초록공이면 멈춰보자
+		-- if(c.is_player) hit_count=1
 	end
 
+	local spd=sqrt(c.sx^2+c.sy^2)
+	local a_spd=atan2(c.sx,c.sy)
+	a_hit=a_hit or atan2(px-c.x,py-c.y)
+	local next_a=a_hit+(a_hit-a_spd)+0.5
+	c.sx=cos(next_a)*spd
+	c.sy=sin(next_a)*spd
+	c.hit_c=3
 
-	local spd=sqrt(c.sx^2+c.sy^2)
-	local spd_a=atan2(c.sx,c.sy)
-	local hit_a=atan2(px-c.x,py-c.y)
-	local next_a=hit_a+(hit_a-spd_a)+0.5
-	c.sx=cos(next_a)*spd
-	c.sy=sin(next_a)*spd
-	c.hit_c=3
+	-- 충돌 시점 상황까지 돌아간 시간만큼 교환한 속도를 즉시 적용
+	if r_to_hit>0 then
+		c.x+=c.sx*r_to_hit
+		c.y+=c.sy*r_to_hit
+	end
 end
---[[ function bouncing_point(c,px,py)
-	local spd=sqrt(c.sx^2+c.sy^2)
-	local spd_a=atan2(c.sx,c.sy)
-	local hit_a=atan2(px-c.x,py-c.y)
-	local next_a=hit_a+(hit_a-spd_a)+0.5
-	c.sx=cos(next_a)*spd
-	c.sy=sin(next_a)*spd
-	c.hit_c=3
-end ]]
 
 -- 원과 박스의 충돌 처리
 function bouncing_boxes(c)
@@ -70,7 +84,6 @@ function bouncing_boxes(c)
 		local x1,y1,x2,y2=b[1],b[2],b[3],b[4]
 		-- 좌우 + 모서리
 		if c.y+c.r>y1 and c.y-c.r<y2 then
-			
 			if c.y>y1 and c.y<y2 then -- 좌우 벽면
 				if c.x<x1 and c.x+c.r>x1 then
 					c.sx*=-1
@@ -82,17 +95,11 @@ function bouncing_boxes(c)
 					c.hit_c=3
 				end
 			elseif c.y<=y1 then -- 상단 모서리
-				if c.x<=x1 then -- 좌상
-					if((x1-c.x)^2+(y1-c.y)^2<=c.r^2) bouncing_point(c,x1,y1)
-				elseif c.x>=x2 then -- 우상
-					if((x2-c.x)^2+(y1-c.y)^2<=c.r^2) bouncing_point(c,x2,y1)
-				end
+				if c.x<=x1 then bouncing_point(c,x1,y1) -- 좌상 
+				elseif c.x>=x2 then bouncing_point(c,x2,y1) end -- 우상
 			else -- 하단 모서리
-				if c.x<=x1 then -- 좌하
-					if((x1-c.x)^2+(y2-c.y)^2<=c.r^2) bouncing_point(c,x1,y2)
-				elseif c.x>=x2 then -- 우하
-					if((x2-c.x)^2+(y2-c.y)^2<=c.r^2) bouncing_point(c,x2,y2)
-				end
+				if c.x<=x1 then bouncing_point(c,x1,y2) -- 좌하
+				elseif c.x>=x2 then bouncing_point(c,x2,y2) end -- 우하
 			end
 		end
 		-- 상하
@@ -147,8 +154,8 @@ function circ_collision(c1,c2)
 		-- 이전 프레임의 거리가 반지름 합보다 가깝거나,
 		-- 이전 프레임의 거리가 현재 프레임의 거리보다 더 짧다??? (반사되면서 충돌하면 이런 경우가 있음)
 		-- 이러면... 충돌 방향만 가지고 서로 밀어낸다(정석은 아니지만... 나중에 좋은 방법 생각나면 바꾸는 걸로)
-		a_hit=atan2(dx,dy)
 		local push_dist=(c1.r+c2.r-dist_now)/2 -- 밀어내야할 거리
+		a_hit=atan2(dx,dy)
 		c1.x-=cos(a_hit)*push_dist
 		c1.y-=sin(a_hit)*push_dist
 		c2.x+=cos(a_hit)*push_dist
@@ -188,10 +195,12 @@ function circ_collision(c1,c2)
 	c2.sy=sy_remain_c2+sy_to_c2
 
 	-- 충돌 시점 상황까지 돌아간 시간만큼 교환한 속도를 즉시 적용
-	c1.x+=c1.sx*r_to_hit
-	c1.y+=c1.sy*r_to_hit
-	c2.x+=c1.sx*r_to_hit
-	c2.y+=c1.sy*r_to_hit
+	if r_to_hit>0 then
+		c1.x+=c1.sx*r_to_hit
+		c1.y+=c1.sy*r_to_hit
+		c2.x+=c1.sx*r_to_hit
+		c2.y+=c1.sy*r_to_hit
+	end
 end
 
 -- 물리 처리 (끝)
@@ -263,12 +272,10 @@ end
 -- 기타 (끝)
 -------------------------------------------------------------------------------
 
-
-
-
-
 -------------------------------------------------------------------------------
 -- 게임
+
+hit_count=0 -- 디버그용
 
 function _init()
 	cls(c_bg)
@@ -294,13 +301,12 @@ function _init()
 		c.hit_c=0
 		add(circles,c)
 	end
-	add(circles,{x=12,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[1]})
-	-- add(circles,{x=48,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2]})
+	add(circles,{x=12,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true}) -- 초록 구슬
 	add(circles,{x=74,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 	add(circles,{x=84,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 	add(circles,{x=84,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 	add(circles,{x=94,y=64-12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=94,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2]})
+	add(circles,{x=94,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2]}) -- 주황 구슬
 	add(circles,{x=94,y=64+12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 	add(circles,{x=104,y=64-18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 	add(circles,{x=104,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
@@ -323,13 +329,16 @@ function _init()
 end
 
 kick=false
-kick_ready=false
+kick_ready_t=0
 kick_a=0
 kick_a_acc=0
+kick_pow_min=1
+kick_pow_max=4.2
+kick_pow=kick_pow_max
 
 function _update60()
 	f+=1
-	-- hit_count=0
+
 	-- 충돌 처리
 	for i=1,#circles do
 		local c=circles[i]
@@ -345,31 +354,32 @@ function _update60()
 		c.y+=c.sy
 		if(c.sx!=0) c.sx=abs(c.sx)<0.05 and 0 or c.sx*0.988
 		if(c.sy!=0) c.sy=abs(c.sy)<0.05 and 0 or c.sy*0.988
-
-		-- (테스트) 완전히 멈추면 테두리 밝게
-		-- if(c.sx==0 and c.sy==0) c.hit_c=3
 	end
 	
-	-- Z누르면 초록공 치기
+	-- Z 누르면 초록공 치기
 	if btn(4) then
 		if not kick then
 			kick=true
-			circles[1].sx=cos(kick_a)*4
-			circles[1].sy=sin(kick_a)*4
+			kick_ready_t=0
+			circles[1].sx=cos(kick_a)*kick_pow
+			circles[1].sy=sin(kick_a)*kick_pow
 		end
 	else kick=false end
 
-	-- 좌우 키로 각도 조정
+	-- 화살표 키
 	if btn(0) or btn(1) or btn(2) or btn(3) then
-		kick_ready=true
-		kick_a_acc=min(0.01,kick_a_acc+0.0002)
-		if btn(0) or btn(1) then
-			kick_a+=btn(1) and -kick_a_acc or kick_a_acc
-		end
+		kick_ready_t=60
+		-- 좌우 키로 각도
+		if btn(0) then kick_a_acc=min(0.4,kick_a_acc+0.001)
+		elseif btn(1) then kick_a_acc=max(-0.4,kick_a_acc-0.001) end
+		-- 상하 키로 파워
+		if btn(2) then kick_pow+=(kick_pow_max-kick_pow)*0.04
+		elseif btn(3) then kick_pow+=(kick_pow_min-kick_pow)*0.04 end
 	else
-		kick_a_acc=0
-		kick_ready=false
+		kick_ready_t=max(0,kick_ready_t-1)
 	end
+	kick_a+=kick_a_acc
+	kick_a_acc=abs(kick_a_acc)<0.0006 and 0 or kick_a_acc*0.86
 end
 
 function _draw()
@@ -432,6 +442,7 @@ function _draw()
 			line(x1+1+i,y2+1,x1+1+i,y2+1+i,c_sd)
 		end
 		rectfill(x1+d+2,y1+d+2,x2+d+2,y2+d+2,c_sd)
+
 		-- 박스
 		for i=0,(x2-x1)\8-1 do
 			for j=0,(y2-y1)\8-1 do
@@ -455,18 +466,22 @@ function _draw()
 		circfill(x-1,y-1,c.r-2,c2)
 		line(x-3,y-2,x-1,y-2,c3)
 		line(x-2,y-3,x-2,y-1,c3)
+		-- pset(x-4,y-2,c4)
+		-- pset(x-2,y-4,c4)
 		
 		if(c.hit_c>0) c.hit_c-=1
 	end
 
 	-- 구슬 칠 방향 그리기
-	if kick_ready and f%2==0 then
+	if kick_ready_t>0 and f%2==0 then
 		local c=circles[1]
-		draw_dot_line(c.x,c.y,kick_a,2,60)
+		draw_dot_line(c.x,c.y,kick_a,2,10+kick_pow*13)
 	end
 
+	-- 디버그용
+	-- print_log() -- debug: log
 	-- draw_color_table()
-	-- if(hit_count>0) stop() -- 충돌했으면 일단 멈춰보자...
+	-- if(hit_count>0) stop() -- debug: 일단 멈춰보자...
 end
 
 -- 게임 (끝)

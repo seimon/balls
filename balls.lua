@@ -81,7 +81,9 @@ end
 -- 원과 박스의 충돌 처리
 function bouncing_boxes(c)
 	for b in all(boxes) do
-		local x1,y1,x2,y2=b[1],b[2],b[3],b[4]
+		-- local x1,y1,x2,y2=b[1],b[2],b[3],b[4]
+		local x1,y1=b[1]*8,b[2]*8
+		local x2,y2=x1+b[3]*8,y1+b[4]*8
 		-- 좌우 + 모서리
 		if c.y+c.r>y1 and c.y-c.r<y2 then
 			if c.y>y1 and c.y<y2 then -- 좌우 벽면
@@ -232,7 +234,8 @@ end
 
 -- 정사각형 큐브 그리기
 function draw_cube_7x7(x,y)
-	local c1,c2,c3=3,6,11 -- 초록
+	-- local c1,c2,c3=3,6,11 -- 초록
+	local c1,c2,c3=4,2,7 -- 회색
 	-- local c1,c2,c3=5,13,12 -- 보라
 	-- c1,c2,c3=8,14,15 -- 주황
 
@@ -285,11 +288,27 @@ function _init()
 	local colors={}
 	colors[1]={3,6,11,6} -- 녹색(어두운,중간,하이라이트,이동자국)
 	colors[2]={8,14,15,8} -- 주황색
-	colors[3]={2,13,12,5} -- 포도색
+	-- colors[3]={2,13,12,5} -- 포도색
+	colors[3]={5,13,12,4} -- 포도색
+
+	-- 홀 추가
+	holes={}
+	add(holes,{x=104,y=64,r=5,})
 
 	-- 구슬 여럿 추가
 	circles={}
-	for i=1,0 do
+	add(circles,{x=12,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true}) -- 초록 구슬
+	add(circles,{x=54,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=64,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=64,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=74,y=64-12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=74,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2]}) -- 주황 구슬
+	add(circles,{x=74,y=64+12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=84,y=64-18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=84,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=84,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(circles,{x=84,y=64+18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	--[[ for i=1,0 do
 		local c={}
 		c.x=14+(i-1)%5*24
 		c.y=20+flr((i-1)/5)*30
@@ -300,32 +319,22 @@ function _init()
 		c.sy=sin(dir)*spd
 		c.hit_c=0
 		add(circles,c)
-	end
-	add(circles,{x=12,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true}) -- 초록 구슬
-	add(circles,{x=74,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=84,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=84,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=94,y=64-12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=94,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2]}) -- 주황 구슬
-	add(circles,{x=94,y=64+12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=104,y=64-18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=104,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=104,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=104,y=64+18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	end ]]
+
+	
 	
 	-- 박스 추가
 	boxes={}
-	add(boxes,{64,40,72,48})
-	add(boxes,{72,32,80,40})
-	add(boxes,{64,80,72,88})
-	add(boxes,{72,88,80,96})
-	add(boxes,{80,24,112,32})
-	add(boxes,{80,96,112,104})
-	
+	add(boxes,{8,3,3,1})
+	add(boxes,{11,4,1,1})
+	add(boxes,{12,5,1,1})
+	add(boxes,{12,10,1,1})
+	add(boxes,{11,11,1,1})
+	add(boxes,{8,12,3,1})
 
 	-- 팔레트는 보너스 색상과 섞어서 사용
 	-- https://www.lexaloffle.com/bbs/?pid=68190#p
-	pal({[0]=128,129,130,131,132,133,3,7,136,5,138,139,14,141,142,15},1)
+	pal({[0]=128,129,6,131,13,133,3,7,136,5,138,139,14,141,142,15},1)
 end
 
 kick=false
@@ -370,8 +379,8 @@ function _update60()
 	if btn(0) or btn(1) or btn(2) or btn(3) then
 		kick_ready_t=60
 		-- 좌우 키로 각도
-		if btn(0) then kick_a_acc=min(0.4,kick_a_acc+0.001)
-		elseif btn(1) then kick_a_acc=max(-0.4,kick_a_acc-0.001) end
+		if btn(0) then kick_a_acc=min(0.4,kick_a_acc+0.0015)
+		elseif btn(1) then kick_a_acc=max(-0.4,kick_a_acc-0.0015) end
 		-- 상하 키로 파워
 		if btn(2) then kick_pow+=(kick_pow_max-kick_pow)*0.04
 		elseif btn(3) then kick_pow+=(kick_pow_min-kick_pow)*0.04 end
@@ -379,7 +388,7 @@ function _update60()
 		kick_ready_t=max(0,kick_ready_t-1)
 	end
 	kick_a+=kick_a_acc
-	kick_a_acc=abs(kick_a_acc)<0.0006 and 0 or kick_a_acc*0.86
+	kick_a_acc=abs(kick_a_acc)<0.0006 and 0 or kick_a_acc*0.80
 end
 
 function _draw()
@@ -389,7 +398,7 @@ function _draw()
 	-- 이전 프레임의 자국을 붙여넣은 후 배경색 원, 점을 그려서 조금씩 지우는 방식
 	pasteprevframe()
 	for c in all(circles) do
-		circfill(c.x,c.y,c.r*0.8,c.c[4])
+		if(not c.is_hole) circfill(c.x,c.y,c.r*0.8,c.c[4])
 	end
 	for i=0,80 do
 		if(i<20) circfill(rnd(sw),rnd(sh),i<8 and 2 or 1,c_bg)
@@ -432,7 +441,9 @@ function _draw()
 
 	-- 박스+그림자
 	for b in all(boxes) do
-		local x1,y1,x2,y2=b[1],b[2],b[3],b[4]
+		-- local x1,y1,x2,y2=b[1],b[2],b[3],b[4]
+		local x1,y1=b[1]*8,b[2]*8
+		local x2,y2=x1+b[3]*8,y1+b[4]*8
 		-- 전체 그림자
 		pset(x2+1,y1+1,c_sd)
 		pset(x1+1,y2+1,c_sd)
@@ -452,10 +463,25 @@ function _draw()
 		rect(x1,y1,x2,y2,0) -- outline
 	end
 
+	-- 홀 그리기
+	for c in all(holes) do
+		local x,y=flr(c.x+0.5),flr(c.y+0.5)
+		circ(x+1,y,c.r,4)
+		circ(x,y+1,c.r,4)
+		circ(x,y-1,c.r,5)
+		circ(x-1,y,c.r,5)
+		circfill(x,y,c.r,0)
+		-- circfill(x,y,c.r-2,5)
+		-- circfill(x,y+1,c.r-2,5)
+		-- circfill(x+1,y,c.r-2,5)
+		-- circfill(x+1,y+1,c.r-2,5)
+		-- circ(x,y,c.r-f%40/10,5)
+	end
+
 	-- 구슬 그리기
 	for c in all(circles) do
 		local x,y=flr(c.x+0.5),flr(c.y+0.5)
-		
+
 		-- 충돌하면 색을 밝게
 		local c1,c2,c3,c4=c.c[1],c.c[2],c.c[3],0
 		if c.hit_c>2 then c1,c2,c3,c4=c.c[3],c.c[3],7,c.c[2]
@@ -466,9 +492,7 @@ function _draw()
 		circfill(x-1,y-1,c.r-2,c2)
 		line(x-3,y-2,x-1,y-2,c3)
 		line(x-2,y-3,x-2,y-1,c3)
-		-- pset(x-4,y-2,c4)
-		-- pset(x-2,y-4,c4)
-		
+
 		if(c.hit_c>0) c.hit_c-=1
 	end
 

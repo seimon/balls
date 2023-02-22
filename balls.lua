@@ -10,7 +10,7 @@ c_sd=5 -- shadow color
 -- log
 log_txt={}
 function print_log()
-	if(#log_txt<=0) return nil
+	if(#log_txt<=0) return
 	for i=#log_txt,max(1,#log_txt-15),-1 do
 		print(log_txt[i],4,4+(#log_txt-i)*7,14)
 	end
@@ -32,7 +32,7 @@ end
 
 -- 원과 점의 충돌 처리
 function bouncing_point(c,px,py)
-	if((px-c.x)^2+(py-c.y)^2>c.r^2) return nil
+	if((px-c.x)^2+(py-c.y)^2>c.r^2) return
 
 	-- [정확히 충돌한 시점으로 되돌리기]
 	-- 현재 좌표의 거리, 1프레임 전 좌표간 거리, 거리를 활용해서 실제 충돌 지점을 산출한다.
@@ -54,7 +54,7 @@ function bouncing_point(c,px,py)
 	else
 		-- 이전 프레임도 충돌 거리보다 가깝다면?
 		-- 강제로 멀리 밀어준다(정석은 아니지만 대충 퉁치자)
-		local push_dist=c.r-dist_now -- 밀어내야할 거리
+		local push_dist=c.r-dist_now+0.1 -- 밀어내야할 거리
 		a_hit=atan2(px-c.x,py-c.y)
 		c.x-=cos(a_hit)*push_dist
 		c.y-=sin(a_hit)*push_dist
@@ -79,6 +79,7 @@ function bouncing_point(c,px,py)
 end
 
 -- 원과 박스의 충돌 처리
+-- todo: 상하좌우 충돌부터 먼저 처리를 끝낸 후에 모서리 처리를 모아서 해야 함
 function bouncing_boxes(c)
 	for b in all(boxes) do
 		-- local x1,y1,x2,y2=b[1],b[2],b[3],b[4]
@@ -119,13 +120,24 @@ function bouncing_boxes(c)
 	end
 end
 
+
+-- 원과 홀의 충돌 처리
+function hole_collision(c,h)
+	local rr=c.r+1 -- 홀의 반지름은 1로 처리(거의 중심에 닿아야 들어가는 것)
+	if(abs(c.x-h.x)>rr or abs(c.y-h.y)>rr) return -- x, y 좌표 거리가 멀면 충돌 아님
+	local dx,dy=c.x-h.x,c.y-h.y
+	local dd=dx*dx+dy*dy
+	if(dd>rr*rr) return -- 거리가 원과 홀의 반지름 합보다 짧아야 충돌(제곱근 사용하지 않고 판정부터 빠르게)
+	return true,h.x,h.y
+end
+
 -- 두 원의 충돌 처리(질량은 동일하다고 가정)
 function circ_collision(c1,c2)
 	local rr=c1.r+c2.r
 	if(abs(c1.x-c2.x)>rr or abs(c1.y-c2.y)>rr) return -- x, y 좌표 거리가 멀면 충돌 아님
 	local dx,dy=c2.x-c1.x,c2.y-c1.y
 	local dd=dx*dx+dy*dy
-	if(dd>rr*rr) return -- 거리가 두 원의 반지름 합보다 짧아야 충돌(제곱근 사용하지 않고 판정부터 빠르게 처리)
+	if(dd>rr*rr) return -- 거리가 두 원의 반지름 합보다 짧아야 충돌(제곱근 사용하지 않고 판정부터 빠르게)
 	
 	c1.hit_c=3
 	c2.hit_c=3
@@ -156,7 +168,7 @@ function circ_collision(c1,c2)
 		-- 이전 프레임의 거리가 반지름 합보다 가깝거나,
 		-- 이전 프레임의 거리가 현재 프레임의 거리보다 더 짧다??? (반사되면서 충돌하면 이런 경우가 있음)
 		-- 이러면... 충돌 방향만 가지고 서로 밀어낸다(정석은 아니지만... 나중에 좋은 방법 생각나면 바꾸는 걸로)
-		local push_dist=(c1.r+c2.r-dist_now)/2 -- 밀어내야할 거리
+		local push_dist=(c1.r+c2.r-dist_now)/2+0.1 -- 밀어내야할 거리
 		a_hit=atan2(dx,dy)
 		c1.x-=cos(a_hit)*push_dist
 		c1.y-=sin(a_hit)*push_dist
@@ -170,6 +182,9 @@ function circ_collision(c1,c2)
 	local spd_c2=sqrt(c2.sx*c2.sx+c2.sy*c2.sy)
 	local a_c1=atan2(c1.sx,c1.sy)
 	local a_c2=atan2(c2.sx,c2.sy)
+
+	-- 충돌 이펙트 추가
+	add_hit_eff((c1.x+c2.x)/2,(c1.y+c2.y)/2,a_hit+0.25)
 
 	-- 질량 비율
 	-- local m_ratio=c1.m/c2.m
@@ -272,6 +287,70 @@ function draw_color_table()
 	end
 end
 
+-- 구슬 그리기
+function draw_circle(c)
+	local x,y=flr(c.x+0.5),flr(c.y+0.5)
+	-- 충돌하면 색을 밝게
+	local c1,c2,c3,c4=c.c[1],c.c[2],c.c[3],0
+	if c.hit_c>2 then c1,c2,c3,c4=c.c[3],c.c[3],7,c.c[2]
+	elseif c.hit_c>0 then c1,c2,c3,c4=c.c[2],c.c[3],7,0 end
+
+	circfill(x,y,c.r,c4) -- outline
+	circfill(x,y,c.r-1,c1)
+	circfill(x-1,y-1,c.r-2,c2)
+	line(x-3,y-2,x-1,y-2,c3)
+	line(x-2,y-3,x-2,y-1,c3)
+
+	if(c.hit_c>0) c.hit_c-=1
+end
+
+-- 이펙트 그리기
+function draw_eff()
+	for e in all(eff) do
+		if e.type=="circle" then
+			local r=e.eff_timer/30
+			if r<0.2 then fillp(0b1110111110111111.1)
+			elseif r<0.3 then fillp(0b1010110110100111.1)
+			elseif r<0.5 then fillp(0b1010010110100101.1) end
+			draw_circle(e)
+			fillp()
+			e.sx*=0.3
+			e.sy*=0.3
+			e.x+=e.sx+(e.tx-e.x)*0.25
+			e.y+=e.sy+(e.ty-e.y)*0.25
+		elseif e.type=="hit" then
+			-- pset(e.x,e.y,rnd({7,10,14}))
+			pset(e.x,e.y,7)
+			e.x+=e.sx
+			e.y+=e.sy
+			e.sx*=0.94
+			e.sy*=0.94
+		end
+
+		e.eff_timer-=1
+		if(e.eff_timer<=0) del(eff,e)
+	end
+end
+
+-- 충돌 이펙트
+function add_hit_eff(x,y,angle)
+	for i=1,6 do
+		local a=angle+(rnd()<0.5 and 0 or 0.5)+rnd(0.1)-0.05
+		local spd=1+rnd(2)
+		local sx=cos(a)*spd
+		local sy=sin(a)*spd
+		add(eff,
+		{
+			type="hit",
+			x=x+rnd(4)-2,
+			y=y+rnd(4)-2,
+			sx=sx,
+			sy=sy,
+			eff_timer=6+flr(rnd(8))
+		})
+	end
+end
+
 -- 기타 (끝)
 -------------------------------------------------------------------------------
 
@@ -279,6 +358,7 @@ end
 -- 게임
 
 hit_count=0 -- 디버그용
+eff={} -- 출력할 이펙트들
 
 function _init()
 	cls(c_bg)
@@ -293,7 +373,8 @@ function _init()
 
 	-- 홀 추가
 	holes={}
-	add(holes,{x=104,y=64,r=5,})
+	add(holes,{x=104,y=64,r=5})
+	-- add(holes,{x=20,y=108,r=5})
 
 	-- 구슬 여럿 추가
 	circles={}
@@ -308,6 +389,12 @@ function _init()
 	add(circles,{x=84,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 	add(circles,{x=84,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 	add(circles,{x=84,y=64+18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+
+	-- 임시로 모든 공에 공통 값 추가
+	-- for c in all(circles) do
+	-- 	c.is_ssok=false
+	-- end
+
 	--[[ for i=1,0 do
 		local c={}
 		c.x=14+(i-1)%5*24
@@ -320,17 +407,28 @@ function _init()
 		c.hit_c=0
 		add(circles,c)
 	end ]]
-
-	
 	
 	-- 박스 추가
 	boxes={}
-	add(boxes,{8,3,3,1})
-	add(boxes,{11,4,1,1})
-	add(boxes,{12,5,1,1})
-	add(boxes,{12,10,1,1})
-	add(boxes,{11,11,1,1})
-	add(boxes,{8,12,3,1})
+	add(boxes,{0,0,14,1})
+	add(boxes,{13,1,1,4})
+	add(boxes,{14,4,2,1})
+
+	add(boxes,{0,11,4,1})
+	add(boxes,{4,6,1,6})
+	add(boxes,{5,5,1,1})
+	add(boxes,{6,4,1,1})
+
+	add(boxes,{9,11,4,1})
+	
+	add(boxes,{0,15,16,1})
+
+	-- add(boxes,{8,3,3,1})
+	-- add(boxes,{11,4,1,1})
+	-- add(boxes,{12,5,1,1})
+	-- add(boxes,{12,10,1,1})
+	-- add(boxes,{11,11,1,1})
+	-- add(boxes,{8,12,3,1})
 
 	-- 팔레트는 보너스 색상과 섞어서 사용
 	-- https://www.lexaloffle.com/bbs/?pid=68190#p
@@ -359,10 +457,23 @@ function _update60()
 				circ_collision(c,c2)
 			end
 		end
+
+		-- 홀에 들어갔는지?
+		c.is_ssok,c.tx,c.ty=hole_collision(c,holes[1])
+		
 		c.x+=c.sx
 		c.y+=c.sy
 		if(c.sx!=0) c.sx=abs(c.sx)<0.05 and 0 or c.sx*0.988
 		if(c.sy!=0) c.sy=abs(c.sy)<0.05 and 0 or c.sy*0.988
+	end
+
+	-- 홀에 들어간 공은 지운다 + 이펙트 추가
+	for c in all(circles) do
+		if c.is_ssok then
+			c.type,c.eff_timer="circle",30
+			add(eff,c)
+			del(circles,c)
+		end
 	end
 	
 	-- Z 누르면 초록공 치기
@@ -426,13 +537,31 @@ function _draw()
 	-- 	line(x+4,y,x,y+4,c_sd)
 	-- end
 
-	-- 배경 패턴
-	for i=0,287 do
-		local x=i%12*10+5
-		local y=i\12*5+5
-		if i\12%2==0 then line(x,y,x+2,y+2,c_sd)
-		else x+=7 line(x,y,x-2,y+2,c_sd) end
+	-- 배경 미끄럼방지 패턴
+	-- for i=0,287 do
+	-- 	local x=i%12*10+5
+	-- 	local y=i\12*5+5
+	-- 	if i\12%2==0 then line(x,y,x+2,y+2,c_sd)
+	-- 	else x+=7 line(x,y,x-2,y+2,c_sd) end
+	-- end
+
+	-- 배경 벽돌 무늬
+	for i=1,19 do
+		local x,y=0,i*7-2
+		for k=0,5 do
+			local x2=x+14+(i*3+k)%14
+			line(x,y,x2,y,c_sd)
+			x=x2+(i*3+k)%5+1
+		end
+		for j=1,10 do
+			local x=j*13-9+(i*3+j)%(6+j/2)
+			line(x,y-6,x,y,c_sd)
+		end
 	end
+
+	-- 바깥벽 그림자
+	rectfill(0,0,4,sh,c_sd)
+	rectfill(4,0,sw,4,c_sd)
 
 	-- 구슬 그림자
 	for c in all(circles) do
@@ -441,7 +570,6 @@ function _draw()
 
 	-- 박스+그림자
 	for b in all(boxes) do
-		-- local x1,y1,x2,y2=b[1],b[2],b[3],b[4]
 		local x1,y1=b[1]*8,b[2]*8
 		local x2,y2=x1+b[3]*8,y1+b[4]*8
 		-- 전체 그림자
@@ -471,16 +599,13 @@ function _draw()
 		circ(x,y-1,c.r,5)
 		circ(x-1,y,c.r,5)
 		circfill(x,y,c.r,0)
-		-- circfill(x,y,c.r-2,5)
-		-- circfill(x,y+1,c.r-2,5)
-		-- circfill(x+1,y,c.r-2,5)
-		-- circfill(x+1,y+1,c.r-2,5)
-		-- circ(x,y,c.r-f%40/10,5)
 	end
 
 	-- 구슬 그리기
 	for c in all(circles) do
-		local x,y=flr(c.x+0.5),flr(c.y+0.5)
+		draw_circle(c)
+
+		--[[ local x,y=flr(c.x+0.5),flr(c.y+0.5)
 
 		-- 충돌하면 색을 밝게
 		local c1,c2,c3,c4=c.c[1],c.c[2],c.c[3],0
@@ -493,13 +618,36 @@ function _draw()
 		line(x-3,y-2,x-1,y-2,c3)
 		line(x-2,y-3,x-2,y-1,c3)
 
-		if(c.hit_c>0) c.hit_c-=1
+		if(c.hit_c>0) c.hit_c-=1 ]]
 	end
+
+	-- 이펙트 그리기
+	draw_eff()
 
 	-- 구슬 칠 방향 그리기
 	if kick_ready_t>0 and f%2==0 then
 		local c=circles[1]
 		draw_dot_line(c.x,c.y,kick_a,2,10+kick_pow*13)
+	end
+
+	-- 로고
+	do
+		local x,y=3,12
+		local s="\^w\^tdungeon&pool"
+		print(s,x+4-1,y+4,c_sd)
+		print(s,x+4,y+4,c_sd)
+		-- print(s,x+2-1,y+2,0)
+		-- print(s,x+2+1,y+2,0)
+		-- print(s,x+2+1,y+2-1,0)
+		print(s,x-1,y,0)
+		print(s,x+2,y,0)
+		print(s,x-1,y-1,0)
+		print(s,x+1,y-1,0)
+		print(s,x-1,y+1,0)
+		print(s,x+1,y+1,0)
+		print(s,x+1,y,5)
+		print(s,x,y,8)
+		print("\^w\^t&",x+56,y,4)
 	end
 
 	-- 디버그용

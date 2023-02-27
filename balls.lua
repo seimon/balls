@@ -82,9 +82,7 @@ end
 -- todo: 상하좌우 충돌부터 먼저 처리를 끝낸 후에 모서리 처리를 모아서 해야 함
 function bouncing_boxes(c)
 	for b in all(boxes) do
-		-- local x1,y1,x2,y2=b[1],b[2],b[3],b[4]
-		local x1,y1=b[1]*8,b[2]*8
-		local x2,y2=x1+b[3]*8,y1+b[4]*8
+		local x1,y1,x2,y2=get_box_coords(b)
 		-- 좌우 + 모서리
 		if c.y+c.r>y1 and c.y-c.r<y2 then
 			if c.y>y1 and c.y<y2 then -- 좌우 벽면
@@ -119,7 +117,6 @@ function bouncing_boxes(c)
 		end
 	end
 end
-
 
 -- 원과 홀의 충돌 처리
 function hole_collision(c,h)
@@ -351,6 +348,39 @@ function add_hit_eff(x,y,angle)
 	end
 end
 
+-- 박스 데이타 4개 좌표 뽑기
+function get_box_coords(b)
+	local x1,y1=b[1]*8,b[2]*8
+	local x2,y2=x1+b[3]*8,y1+b[4]*8
+	return x1,y1,x2,y2
+end
+
+-- 로고 그리기
+function draw_title(n)
+	local x,y=3,8
+	local s="\^w\^tdungeon&pool"
+
+	-- 그림자
+	if n==0 then
+		local d=5
+		print(s,x+d-1,y+d,c_sd)
+		print(s,x+d,y+d,c_sd)
+	end
+
+	-- 글자
+	if n==1 then
+		print(s,x-1,y,0)
+		print(s,x+2,y,0)
+		print(s,x-1,y-1,0)
+		print(s,x+1,y-1,0)
+		print(s,x-1,y+1,0)
+		print(s,x+1,y+1,0)
+		print(s,x+1,y,5)
+		print(s,x,y,8)
+		print("\^w\^t&",x+56,y,4)
+	end
+end
+
 -- 기타 (끝)
 -------------------------------------------------------------------------------
 
@@ -407,12 +437,16 @@ function _init()
 		c.hit_c=0
 		add(circles,c)
 	end ]]
+	abyss={}
+	add(abyss,{14,0,2,4})
+	add(abyss,{0,12,5,3})
+	add(abyss,{9,12,7,4})
 	
 	-- 박스 추가
 	boxes={}
 	add(boxes,{0,0,14,1})
 	add(boxes,{13,1,1,4})
-	add(boxes,{14,4,2,1})
+	add(boxes,{14,4,3,1})
 
 	add(boxes,{0,11,4,1})
 	add(boxes,{4,6,1,6})
@@ -421,14 +455,7 @@ function _init()
 
 	add(boxes,{9,11,4,1})
 	
-	add(boxes,{0,15,16,1})
-
-	-- add(boxes,{8,3,3,1})
-	-- add(boxes,{11,4,1,1})
-	-- add(boxes,{12,5,1,1})
-	-- add(boxes,{12,10,1,1})
-	-- add(boxes,{11,11,1,1})
-	-- add(boxes,{8,12,3,1})
+	add(boxes,{0,15,9,1})
 
 	-- 팔레트는 보너스 색상과 섞어서 사용
 	-- https://www.lexaloffle.com/bbs/?pid=68190#p
@@ -559,6 +586,9 @@ function _draw()
 		end
 	end
 
+	-- 로고 그림자
+	draw_title(0)
+
 	-- 바깥벽 그림자
 	rectfill(0,0,4,sh,c_sd)
 	rectfill(4,0,sw,4,c_sd)
@@ -570,8 +600,7 @@ function _draw()
 
 	-- 박스+그림자
 	for b in all(boxes) do
-		local x1,y1=b[1]*8,b[2]*8
-		local x2,y2=x1+b[3]*8,y1+b[4]*8
+		local x1,y1,x2,y2=get_box_coords(b)
 		-- 전체 그림자
 		pset(x2+1,y1+1,c_sd)
 		pset(x1+1,y2+1,c_sd)
@@ -583,12 +612,35 @@ function _draw()
 		rectfill(x1+d+2,y1+d+2,x2+d+2,y2+d+2,c_sd)
 
 		-- 박스
-		for i=0,(x2-x1)\8-1 do
+		--[[ for i=0,(x2-x1)\8-1 do
 			for j=0,(y2-y1)\8-1 do
 				draw_cube_7x7(1+x1+i*8,1+y1+j*8)
 			end
 		end
-		rect(x1,y1,x2,y2,0) -- outline
+		rect(x1,y1,x2,y2,0) -- outline ]]
+		
+		-- 박스(sspr)
+		palt(0,false) palt(8,true)
+		for i=0,(x2-x1)\8-1 do
+			for j=0,(y2-y1)\8-1 do
+				sspr(0,0,13,13,x1-4+i*8,y1-4+j*8)
+			end
+		end
+	end
+
+	-- 심연
+	for b in all(abyss) do
+		local x1,y1,x2,y2=get_box_coords(b)
+		rectfill(x1,y1,x2,y2,0)
+		for i=1,12 do
+			local x,y=x1+i,y1+i
+			if i>7 then fillp(0b0101111101011111.1)
+			elseif i>4 then fillp(0b0101101001011010.1) end
+			line(x+1,y,x2-1,y,5) -- 아랫면
+			line(x,y,x,y2,i<=2 and 13 or 5) -- 옆면
+			if(i>6 and i<11) line(x-4,y-4,x-4,y2,13) -- 옆면(더 밝은 부분)
+		end
+		fillp()
 	end
 
 	-- 홀 그리기
@@ -620,6 +672,21 @@ function _draw()
 
 		if(c.hit_c>0) c.hit_c-=1 ]]
 	end
+	
+	-- 로고 그림자
+	if(f%2==1) draw_title(0)
+
+	-- 박스 다시 그리기(구슬 앞을 가림)
+	palt(0,false) palt(8,true)
+	for b in all(boxes) do
+		local x1,y1,x2,y2=get_box_coords(b)
+		for i=0,(x2-x1)\8-1 do
+			for j=0,(y2-y1)\8-1 do
+				sspr(16,0,13,13,x1-4+i*8,y1-4+j*8)
+			end
+		end
+	end
+	palt()
 
 	-- 이펙트 그리기
 	draw_eff()
@@ -631,14 +698,11 @@ function _draw()
 	end
 
 	-- 로고
-	do
+	--[[ do
 		local x,y=3,12
 		local s="\^w\^tdungeon&pool"
 		print(s,x+4-1,y+4,c_sd)
 		print(s,x+4,y+4,c_sd)
-		-- print(s,x+2-1,y+2,0)
-		-- print(s,x+2+1,y+2,0)
-		-- print(s,x+2+1,y+2-1,0)
 		print(s,x-1,y,0)
 		print(s,x+2,y,0)
 		print(s,x-1,y-1,0)
@@ -648,7 +712,10 @@ function _draw()
 		print(s,x+1,y,5)
 		print(s,x,y,8)
 		print("\^w\^t&",x+56,y,4)
-	end
+	end ]]
+
+	-- 로고
+	draw_title(1)
 
 	-- 디버그용
 	-- print_log() -- debug: log

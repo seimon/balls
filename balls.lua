@@ -1,5 +1,11 @@
--- 2022-02-18 사각형이랑 충돌하기 구현 중. 네 변이랑 위쪽 모서리 충돌까지만 진행함.
--- sw,sh=480,270
+
+ver=0.11 -- 2022-02-28
+-- todo list:
+-- 심연 체크 필요
+-- 박스 충돌체크를 상하좌우 먼저, 모서리를 마지막에 몰아서 처리하자
+-- 충돌 이펙트를 충돌 강도에 비례하는 느낌으로... + 구슬 색상 반영
+-- 화면 스크롤?
+
 sw,sh=128,128
 cx,cy=sw/2,sh/2
 f=0
@@ -357,6 +363,7 @@ end
 
 -- 로고 그리기
 function draw_title(n)
+
 	local x,y=3,8
 	local s="\^w\^tdungeon&pool"
 
@@ -369,13 +376,12 @@ function draw_title(n)
 
 	-- 글자
 	if n==1 then
-		print(s,x-1,y,0)
-		print(s,x+2,y,0)
+		print(s,x+1,y,0)
 		print(s,x-1,y-1,0)
 		print(s,x+1,y-1,0)
-		print(s,x-1,y+1,0)
-		print(s,x+1,y+1,0)
-		print(s,x+1,y,5)
+		print(s,x-1,y+2,0)
+		print(s,x+1,y+2,0)
+		print(s,x,y+1,3)
 		print(s,x,y,8)
 		print("\^w\^t&",x+56,y,4)
 	end
@@ -439,22 +445,20 @@ function _init()
 	end ]]
 	abyss={}
 	add(abyss,{14,0,2,4})
-	add(abyss,{0,12,5,3})
+	add(abyss,{1,12,4,3})
 	add(abyss,{9,12,7,4})
 	
 	-- 박스 추가
 	boxes={}
-	add(boxes,{0,0,14,1})
-	add(boxes,{13,1,1,4})
+	add(boxes,{0,0,7,1})
+	-- add(boxes,{0,1,2,2})
+	add(boxes,{13,0,1,5})
 	add(boxes,{14,4,3,1})
-
 	add(boxes,{0,11,4,1})
-	add(boxes,{4,6,1,6})
-	add(boxes,{5,5,1,1})
-	add(boxes,{6,4,1,1})
-
+	add(boxes,{4,5,2,2})
+	add(boxes,{4,7,1,5})
 	add(boxes,{9,11,4,1})
-	
+	add(boxes,{0,12,1,3})
 	add(boxes,{0,15,9,1})
 
 	-- 팔레트는 보너스 색상과 섞어서 사용
@@ -466,7 +470,7 @@ kick=false
 kick_ready_t=0
 kick_a=0
 kick_a_acc=0
-kick_pow_min=1
+kick_pow_min=0.4
 kick_pow_max=4.2
 kick_pow=kick_pow_max
 
@@ -486,7 +490,12 @@ function _update60()
 		end
 
 		-- 홀에 들어갔는지?
+		-- todo: 홀 1번만 체크하고 있음
 		c.is_ssok,c.tx,c.ty=hole_collision(c,holes[1])
+
+		-- 심연에 빠졌는지?
+		-- todo: 심연 체크하자
+		c.is_dive=false
 		
 		c.x+=c.sx
 		c.y+=c.sy
@@ -502,6 +511,9 @@ function _update60()
 			del(circles,c)
 		end
 	end
+
+	-- 심연에 들어간 공도 지운다 + 이펙트 추가
+
 	
 	-- Z 누르면 초록공 치기
 	if btn(4) then
@@ -544,45 +556,13 @@ function _draw()
 	end
 	copyprevframe()
 
-	-- 배경 무늬
-	-- fillp(0b1000100010000100.1) for i=1,4 do circ(sw/2,sh/2,i*20,0) end
-	-- fillp(0b0100001000001001.1) for i=1,4 do circ(sw/2,sh/2,i*20-10,0) end
-	-- fillp()
-
-	-- 배경 격자 점 패턴
-	-- for i=0,224 do
-	-- 	local x=i%15*8+7
-	-- 	local y=i\15*8+7
-	-- 	pset(x,y,0)
-	-- end
-
-	-- 배경 격자 X 패턴
-	-- for i=0,143 do
-	-- 	local x=i%12*10+6
-	-- 	local y=i\12*10+6
-	-- 	line(x,y,x+4,y+4,c_sd)
-	-- 	line(x+4,y,x,y+4,c_sd)
-	-- end
-
-	-- 배경 미끄럼방지 패턴
-	-- for i=0,287 do
-	-- 	local x=i%12*10+5
-	-- 	local y=i\12*5+5
-	-- 	if i\12%2==0 then line(x,y,x+2,y+2,c_sd)
-	-- 	else x+=7 line(x,y,x-2,y+2,c_sd) end
-	-- end
-
-	-- 배경 벽돌 무늬
-	for i=1,19 do
-		local x,y=0,i*7-2
-		for k=0,5 do
-			local x2=x+14+(i*3+k)%14
-			line(x,y,x2,y,c_sd)
-			x=x2+(i*3+k)%5+1
-		end
-		for j=1,10 do
-			local x=j*13-9+(i*3+j)%(6+j/2)
-			line(x,y-6,x,y,c_sd)
+	-- 배경 벽돌 무늬(sspr)
+	for i=0,9 do
+		local y=i*16
+		for j=0,9 do
+			local x=j*16
+			if (i+j)%3==0 then sspr(0,16,16,16,x,y)
+			else sspr(16,16,16,16,x,y) end
 		end
 	end
 
@@ -590,88 +570,88 @@ function _draw()
 	draw_title(0)
 
 	-- 바깥벽 그림자
-	rectfill(0,0,4,sh,c_sd)
-	rectfill(4,0,sw,4,c_sd)
+	-- rectfill(0,0,4,sh,c_sd)
+	-- rectfill(4,0,sw,4,c_sd)
+	palt(0,false) palt(8,true)
+	for i=0,15 do
+		local d=flr(i*1.3%2)*2 -- 불규칙적인 높이로
+		local xy=i*8
+		sspr(16,0,16,16,-8-d,xy-d)
+		sspr(16,0,16,16,xy-d,-8-d)
+	end
+	palt()
 
 	-- 구슬 그림자
 	for c in all(circles) do
 		circfill(flr(c.x+2.5),flr(c.y+2.5),c.r-0.5,c_sd)
 	end
 
-	-- 박스+그림자
+	-- 심연(사각형 테두리만 - 박스(기둥)와의 앞뒤관계 때문에 먼저 그림)
+	--[[ for b in all(abyss) do
+		local x1,y1,x2,y2=get_box_coords(b)
+		rect(x1,y1,x2,y2,0)
+	end ]]
+
+	-- 박스 그림자
+	palt(0,false) palt(8,true)
 	for b in all(boxes) do
 		local x1,y1,x2,y2=get_box_coords(b)
-		-- 전체 그림자
-		pset(x2+1,y1+1,c_sd)
-		pset(x1+1,y2+1,c_sd)
-		local d=2
-		for i=1,d do
-			line(x2+1,y1+1+i,x2+1+i,y1+1+i,c_sd)
-			line(x1+1+i,y2+1,x1+1+i,y2+1+i,c_sd)
-		end
-		rectfill(x1+d+2,y1+d+2,x2+d+2,y2+d+2,c_sd)
-
-		-- 박스
-		--[[ for i=0,(x2-x1)\8-1 do
-			for j=0,(y2-y1)\8-1 do
-				draw_cube_7x7(1+x1+i*8,1+y1+j*8)
-			end
-		end
-		rect(x1,y1,x2,y2,0) -- outline ]]
-		
-		-- 박스(sspr)
-		palt(0,false) palt(8,true)
 		for i=0,(x2-x1)\8-1 do
 			for j=0,(y2-y1)\8-1 do
-				sspr(0,0,13,13,x1-4+i*8,y1-4+j*8)
+				-- 그림자는 높이를 불규칙적으로...
+				local d=flr((i+j*1.3)%2)
+				sspr(16,0,16,16,x1+i*8-d+1,y1+j*8-d+1)
 			end
 		end
 	end
+	palt()
 
 	-- 심연
 	for b in all(abyss) do
 		local x1,y1,x2,y2=get_box_coords(b)
 		rectfill(x1,y1,x2,y2,0)
-		for i=1,12 do
+		for i=1,10 do
 			local x,y=x1+i,y1+i
-			if i>7 then fillp(0b0101111101011111.1)
-			elseif i>4 then fillp(0b0101101001011010.1) end
+			if i>7 then fillp(0b1011111111101111.1)
+			elseif i>4 then fillp(0b1010111110101111.1)
+			elseif i>2 then fillp(0b1010010110100101.1) end
 			line(x+1,y,x2-1,y,5) -- 아랫면
-			line(x,y,x,y2,i<=2 and 13 or 5) -- 옆면
-			if(i>6 and i<11) line(x-4,y-4,x-4,y2,13) -- 옆면(더 밝은 부분)
+			line(x,y+1,x,y2-1,i<=2 and 13 or 5) -- 옆면
+			if(i>5 and i<11) line(x-3,y-4+1,x-3,y2-1,13) -- 옆면(더 밝은 부분)
 		end
 		fillp()
 	end
 
+	-- 박스(벽)
+	palt(0,false) palt(8,true)
+	for b in all(boxes) do
+		local x1,y1,x2,y2=get_box_coords(b)
+		-- 박스(sspr)
+		for i=0,(x2-x1)\8-1 do
+			for j=0,(y2-y1)\8-1 do
+				-- 벽은 측면 하단만 보이기 때문에 높이를 조금 낮게 그림
+				sspr(0,0,11,11,x1-2+i*8,y1-2+j*8)
+			end
+		end
+	end
+	palt()
+
 	-- 홀 그리기
+	palt(0,false) palt(11,true)
 	for c in all(holes) do
 		local x,y=flr(c.x+0.5),flr(c.y+0.5)
-		circ(x+1,y,c.r,4)
+		--[[ circ(x+1,y,c.r,4)
 		circ(x,y+1,c.r,4)
 		circ(x,y-1,c.r,5)
 		circ(x-1,y,c.r,5)
 		circfill(x,y,c.r,0)
+		line(x+3,y+5,x+5,y+3,2) ]]
+		sspr(32,0,13,13,x-6,y-6)
 	end
+	palt()
 
 	-- 구슬 그리기
-	for c in all(circles) do
-		draw_circle(c)
-
-		--[[ local x,y=flr(c.x+0.5),flr(c.y+0.5)
-
-		-- 충돌하면 색을 밝게
-		local c1,c2,c3,c4=c.c[1],c.c[2],c.c[3],0
-		if c.hit_c>2 then c1,c2,c3,c4=c.c[3],c.c[3],7,c.c[2]
-		elseif c.hit_c>0 then c1,c2,c3,c4=c.c[2],c.c[3],7,0 end
-		
-		circfill(x,y,c.r,c4) -- outline
-		circfill(x,y,c.r-1,c1)
-		circfill(x-1,y-1,c.r-2,c2)
-		line(x-3,y-2,x-1,y-2,c3)
-		line(x-2,y-3,x-2,y-1,c3)
-
-		if(c.hit_c>0) c.hit_c-=1 ]]
-	end
+	for c in all(circles) do draw_circle(c) end
 	
 	-- 로고 그림자
 	if(f%2==1) draw_title(0)
@@ -682,37 +662,22 @@ function _draw()
 		local x1,y1,x2,y2=get_box_coords(b)
 		for i=0,(x2-x1)\8-1 do
 			for j=0,(y2-y1)\8-1 do
-				sspr(16,0,13,13,x1-4+i*8,y1-4+j*8)
+				-- 높이를 불규칙적으로...
+				local d=flr((i+j*1.3)%2)
+				sspr(0,0,12-d,13-d,x1-4+i*8+d,y1-4+j*8+d)
 			end
 		end
 	end
 	palt()
 
-	-- 이펙트 그리기
+	-- 이펙트
 	draw_eff()
 
-	-- 구슬 칠 방향 그리기
+	-- 구슬 치기 가이드
 	if kick_ready_t>0 and f%2==0 then
 		local c=circles[1]
-		draw_dot_line(c.x,c.y,kick_a,2,10+kick_pow*13)
+		if(c) draw_dot_line(c.x,c.y,kick_a,2,10+kick_pow*13)
 	end
-
-	-- 로고
-	--[[ do
-		local x,y=3,12
-		local s="\^w\^tdungeon&pool"
-		print(s,x+4-1,y+4,c_sd)
-		print(s,x+4,y+4,c_sd)
-		print(s,x-1,y,0)
-		print(s,x+2,y,0)
-		print(s,x-1,y-1,0)
-		print(s,x+1,y-1,0)
-		print(s,x-1,y+1,0)
-		print(s,x+1,y+1,0)
-		print(s,x+1,y,5)
-		print(s,x,y,8)
-		print("\^w\^t&",x+56,y,4)
-	end ]]
 
 	-- 로고
 	draw_title(1)

@@ -1,10 +1,9 @@
 
-ver=0.11 -- 2022-02-28
+ver=0.13 -- 2022-03-01
 -- todo list:
--- 심연 체크 필요
 -- 박스 충돌체크를 상하좌우 먼저, 모서리를 마지막에 몰아서 처리하자
--- 충돌 이펙트를 충돌 강도에 비례하는 느낌으로... + 구슬 색상 반영
 -- 화면 스크롤?
+-- 소리
 
 sw,sh=128,128
 cx,cy=sw/2,sh/2
@@ -28,7 +27,7 @@ function log(s) add(log_txt,s) end
 -------------------------------------------------------------------------------
 -- 물리 처리
 
--- 원과 벽의 충돌 처리
+-- 공과 벽의 충돌 처리
 function bouncing_wall(c,w,h)
 	if(c.x<c.r) c.sx*=-1 c.x+=(c.r-c.x)*2 c.hit_c=3
 	if(c.x>w-c.r) c.sx*=-1 c.x-=(c.r-(w-c.x))*2  c.hit_c=3
@@ -36,7 +35,7 @@ function bouncing_wall(c,w,h)
 	if(c.y>h-c.r) c.sy*=-1 c.y-=(c.r-(h-c.y))*2  c.hit_c=3
 end
 
--- 원과 점의 충돌 처리
+-- 공과 점의 충돌 처리
 function bouncing_point(c,px,py)
 	if((px-c.x)^2+(py-c.y)^2>c.r^2) return
 
@@ -84,7 +83,7 @@ function bouncing_point(c,px,py)
 	end
 end
 
--- 원과 박스의 충돌 처리
+-- 공과 박스의 충돌 처리
 -- todo: 상하좌우 충돌부터 먼저 처리를 끝낸 후에 모서리 처리를 모아서 해야 함
 function bouncing_boxes(c)
 	for b in all(boxes) do
@@ -124,27 +123,48 @@ function bouncing_boxes(c)
 	end
 end
 
--- 원과 홀의 충돌 처리
-function hole_collision(c,h)
+-- 공과 홀의 충돌 처리
+function collision_hole(c,h)
 	local rr=c.r+1 -- 홀의 반지름은 1로 처리(거의 중심에 닿아야 들어가는 것)
 	if(abs(c.x-h.x)>rr or abs(c.y-h.y)>rr) return -- x, y 좌표 거리가 멀면 충돌 아님
 	local dx,dy=c.x-h.x,c.y-h.y
 	local dd=dx*dx+dy*dy
 	if(dd>rr*rr) return -- 거리가 원과 홀의 반지름 합보다 짧아야 충돌(제곱근 사용하지 않고 판정부터 빠르게)
-	return true,h.x,h.y
+	return true,h.x+1,h.y+1
 end
 
--- 두 원의 충돌 처리(질량은 동일하다고 가정)
-function circ_collision(c1,c2)
+-- 공과 심연의 충돌 처리
+function collision_abysses(c)
+	-- 공의 중심이 심연에 닿아야 빠지는 것
+	for b in all(abysses) do
+		local x1,y1,x2,y2=get_box_coords(b)
+		if c.x>=x1 and c.x<=x2 then
+			if c.y>=y1 and c.y<=y2 then
+				-- 공이 떨어져갈 좌표 설정(공이 심연 안쪽으로 확실히 들어가도록)
+				local dx1,dx2=abs(x1-c.x),abs(x2-c.x)
+				local dy1,dy2=abs(y1-c.y),abs(y2-c.y)
+				local tx,ty=c.x+c.sx*5,c.y+c.sy*5
+				if dx1<=c.r then tx=x1+c.r
+				elseif dx2<=c.r then tx=x2-c.r end
+				if dy1<=c.r then ty=y1+c.r
+				elseif dy2<=c.r then ty=y2-c.r end
+				return true,tx,ty
+			end
+		end
+	end
+	return false,c.tx,c.ty
+end
+
+-- 두 공의 충돌 처리(질량은 동일하다고 가정)
+function ball_collision(c1,c2)
 	local rr=c1.r+c2.r
 	if(abs(c1.x-c2.x)>rr or abs(c1.y-c2.y)>rr) return -- x, y 좌표 거리가 멀면 충돌 아님
 	local dx,dy=c2.x-c1.x,c2.y-c1.y
 	local dd=dx*dx+dy*dy
 	if(dd>rr*rr) return -- 거리가 두 원의 반지름 합보다 짧아야 충돌(제곱근 사용하지 않고 판정부터 빠르게)
 	
-	c1.hit_c=3
-	c2.hit_c=3
-
+	-- 여기부터는 충돌 후 처리
+	
 	-- [정확히 충돌한 시점으로 되돌리기]
 	-- 현재 좌표의 거리, 1프레임 전 좌표간 거리, 반지름의 합을 활용해서 실제 충돌 지점을 산출한다.
 	-- 두 원을 그 지점으로 옮긴 후 교환된 속도값을 일부 더해서 현재 프레임에 실제로 있어야 할 위치로 옮긴다.
@@ -185,10 +205,7 @@ function circ_collision(c1,c2)
 	local spd_c2=sqrt(c2.sx*c2.sx+c2.sy*c2.sy)
 	local a_c1=atan2(c1.sx,c1.sy)
 	local a_c2=atan2(c2.sx,c2.sy)
-
-	-- 충돌 이펙트 추가
-	add_hit_eff((c1.x+c2.x)/2,(c1.y+c2.y)/2,a_hit+0.25)
-
+	
 	-- 질량 비율
 	-- local m_ratio=c1.m/c2.m
 	
@@ -221,6 +238,11 @@ function circ_collision(c1,c2)
 		c2.x+=c1.sx*r_to_hit
 		c2.y+=c1.sy*r_to_hit
 	end
+
+	-- 충돌 강도에 따라 이펙트, 반짝임 추가
+	local pow=max(abs(spd_c1_to_c2),abs(spd_c2_to_c1))
+	if(pow>0.1) c1.hit_c=3 c2.hit_c=3 -- 구슬 반짝임
+	if(pow>0.6) add_hit_eff((c1.x+c2.x)/2,(c1.y+c2.y)/2,a_hit+0.25,{c1.c[3],c2.c[3],7},pow)
 end
 
 -- 물리 처리 (끝)
@@ -291,39 +313,52 @@ function draw_color_table()
 end
 
 -- 구슬 그리기
-function draw_circle(c)
-	local x,y=flr(c.x+0.5),flr(c.y+0.5)
-	-- 충돌하면 색을 밝게
+function draw_ball(c,deep)
+	local x,y,r=flr(c.x+0.5),flr(c.y+0.5),c.r
 	local c1,c2,c3,c4=c.c[1],c.c[2],c.c[3],0
-	if c.hit_c>2 then c1,c2,c3,c4=c.c[3],c.c[3],7,c.c[2]
+
+	-- 어디 빠질 때는 어둡게 + 작게, 충돌하면 색을 밝게
+	if deep then
+		if(deep==1) r-=1
+		if(deep>=2) c1,c2,c3,c4=c.c[1],c.c[2],c.c[2],0 r-=2
+	elseif c.hit_c>2 then c1,c2,c3,c4=c.c[3],c.c[3],7,c.c[2]
 	elseif c.hit_c>0 then c1,c2,c3,c4=c.c[2],c.c[3],7,0 end
 
-	circfill(x,y,c.r,c4) -- outline
-	circfill(x,y,c.r-1,c1)
-	circfill(x-1,y-1,c.r-2,c2)
-	line(x-3,y-2,x-1,y-2,c3)
-	line(x-2,y-3,x-2,y-1,c3)
+	circfill(x,y,r,c4) -- outline
+	circfill(x,y,r-1,c1)
+	circfill(x-1,y-1,r-2,c2)
+
+	-- highlight
+	if deep then pset(x-2,y-2,c3)
+	else line(x-3,y-2,x-1,y-2,c3) line(x-2,y-3,x-2,y-1,c3) end
 
 	if(c.hit_c>0) c.hit_c-=1
 end
 
 -- 이펙트 그리기
+-- todo: 레이어 구분 필요(지금은 공 이펙트가 벽에 가려지지 않음)
 function draw_eff()
 	for e in all(eff) do
-		if e.type=="circle" then
+		if e.type=="ball_ssok" or e.type=="ball_dive" then
 			local r=e.eff_timer/30
-			if r<0.2 then fillp(0b1110111110111111.1)
-			elseif r<0.3 then fillp(0b1010110110100111.1)
+			if r<0.15 then fillp(0b1110111110111111.1)
+			elseif r<0.25 then fillp(0b1010110110100111.1)
 			elseif r<0.5 then fillp(0b1010010110100101.1) end
-			draw_circle(e)
+			draw_ball(e,r<0.8 and 2 or 1)
 			fillp()
-			e.sx*=0.3
-			e.sy*=0.3
-			e.x+=e.sx+(e.tx-e.x)*0.25
-			e.y+=e.sy+(e.ty-e.y)*0.25
+			if e.type=="ball_ssok" then
+				e.sx*=0.3
+				e.sy*=0.3
+				e.x+=e.sx+(e.tx-e.x)*0.25
+				e.y+=e.sy+(e.ty-e.y)*0.25
+			else
+				e.sx*=0.8
+				e.sy*=0.8
+				e.x+=e.sx+(e.tx-e.x)*0.2
+				e.y+=e.sy+(e.ty-e.y)*0.2
+			end
 		elseif e.type=="hit" then
-			-- pset(e.x,e.y,rnd({7,10,14}))
-			pset(e.x,e.y,7)
+			pset(e.x,e.y,e.c)
 			e.x+=e.sx
 			e.y+=e.sy
 			e.sx*=0.94
@@ -336,10 +371,10 @@ function draw_eff()
 end
 
 -- 충돌 이펙트
-function add_hit_eff(x,y,angle)
-	for i=1,6 do
+function add_hit_eff(x,y,angle,colors,pow)
+	for i=1,5+flr(pow*2) do
 		local a=angle+(rnd()<0.5 and 0 or 0.5)+rnd(0.1)-0.05
-		local spd=1+rnd(2)
+		local spd=1+rnd(1+pow)
 		local sx=cos(a)*spd
 		local sy=sin(a)*spd
 		add(eff,
@@ -349,7 +384,8 @@ function add_hit_eff(x,y,angle)
 			y=y+rnd(4)-2,
 			sx=sx,
 			sy=sy,
-			eff_timer=6+flr(rnd(8))
+			c=rnd(colors),
+			eff_timer=5+flr(rnd(8))
 		})
 	end
 end
@@ -364,8 +400,11 @@ end
 -- 로고 그리기
 function draw_title(n)
 
-	local x,y=3,8
+	local x,y=4,8
 	local s="\^w\^tdungeon&pool"
+
+	x+=cos(t()*0.6)*2
+	y+=sin(t()*0.6)*2
 
 	-- 그림자
 	if n==0 then
@@ -384,6 +423,18 @@ function draw_title(n)
 		print(s,x,y+1,3)
 		print(s,x,y,8)
 		print("\^w\^t&",x+56,y,4)
+
+		-- 반짝임
+		local s1="dungeon&pool                             "
+		local s2="\^w\^t"
+		for i=1,#s1 do
+			s2..=((flr(f/8)%#s1+1==i) and s1[i] or " ")
+		end
+		-- print(s2,x,y+1,6)
+		-- print(s2,x,y,14)
+		-- todo: 위 print 2개를 같이 쓰면 f가 매프레임 2씩 증가하는 요상한 문제가 있다??????
+		-- 그래서 f로 처리하는 가이드 점선이 이상하게 보이는 현상이 발생
+		log(f)
 	end
 end
 
@@ -413,21 +464,21 @@ function _init()
 	-- add(holes,{x=20,y=108,r=5})
 
 	-- 구슬 여럿 추가
-	circles={}
-	add(circles,{x=12,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true}) -- 초록 구슬
-	add(circles,{x=54,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=64,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=64,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=74,y=64-12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=74,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2]}) -- 주황 구슬
-	add(circles,{x=74,y=64+12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=84,y=64-18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=84,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=84,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(circles,{x=84,y=64+18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	balls={}
+	add(balls,{x=12,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true}) -- 초록 구슬
+	add(balls,{x=54,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(balls,{x=64,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(balls,{x=64,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(balls,{x=74,y=64-12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(balls,{x=74,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2]}) -- 주황 구슬
+	add(balls,{x=74,y=64+12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(balls,{x=84,y=64-18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(balls,{x=84,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(balls,{x=84,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+	add(balls,{x=84,y=64+18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 
 	-- 임시로 모든 공에 공통 값 추가
-	-- for c in all(circles) do
+	-- for c in all(balls) do
 	-- 	c.is_ssok=false
 	-- end
 
@@ -441,12 +492,12 @@ function _init()
 		c.sx=cos(dir)*spd
 		c.sy=sin(dir)*spd
 		c.hit_c=0
-		add(circles,c)
+		add(balls,c)
 	end ]]
-	abyss={}
-	add(abyss,{14,0,2,4})
-	add(abyss,{1,12,4,3})
-	add(abyss,{9,12,7,4})
+	abysses={}
+	add(abysses,{14,0,2,4})
+	add(abysses,{1,12,4,3})
+	add(abysses,{9,12,7,4})
 	
 	-- 박스 추가
 	boxes={}
@@ -471,31 +522,30 @@ kick_ready_t=0
 kick_a=0
 kick_a_acc=0
 kick_pow_min=0.4
-kick_pow_max=4.2
+kick_pow_max=3.6
 kick_pow=kick_pow_max
 
 function _update60()
 	f+=1
 
 	-- 충돌 처리
-	for i=1,#circles do
-		local c=circles[i]
-		bouncing_wall(c,sw,sh) -- 원과 벽 충돌
-		bouncing_boxes(c) -- 원과 박스 충돌
-		if i>1 then -- 원끼리 충돌
+	for i=1,#balls do
+		local c=balls[i]
+		bouncing_wall(c,sw,sh) -- 공과 벽 충돌
+		bouncing_boxes(c) -- 공과 박스 충돌
+		if i>1 then -- 공끼리 충돌
 			for j=1,i-1 do
-				local c2=circles[j]
-				circ_collision(c,c2)
+				local c2=balls[j]
+				ball_collision(c,c2)
 			end
 		end
 
 		-- 홀에 들어갔는지?
 		-- todo: 홀 1번만 체크하고 있음
-		c.is_ssok,c.tx,c.ty=hole_collision(c,holes[1])
+		c.is_ssok,c.tx,c.ty=collision_hole(c,holes[1])
 
 		-- 심연에 빠졌는지?
-		-- todo: 심연 체크하자
-		c.is_dive=false
+		c.is_dive,c.tx,c.ty=collision_abysses(c)
 		
 		c.x+=c.sx
 		c.y+=c.sy
@@ -503,25 +553,24 @@ function _update60()
 		if(c.sy!=0) c.sy=abs(c.sy)<0.05 and 0 or c.sy*0.988
 	end
 
-	-- 홀에 들어간 공은 지운다 + 이펙트 추가
-	for c in all(circles) do
+	-- 홀/심연에 들어간 공은 지운다 + 이펙트 추가
+	for c in all(balls) do
 		if c.is_ssok then
-			c.type,c.eff_timer="circle",30
-			add(eff,c)
-			del(circles,c)
+			c.type,c.eff_timer="ball_ssok",30
+			add(eff,c) del(balls,c)
+		elseif c.is_dive then
+			c.type,c.eff_timer="ball_dive",30
+			add(eff,c) del(balls,c)
 		end
 	end
-
-	-- 심연에 들어간 공도 지운다 + 이펙트 추가
-
 	
 	-- Z 누르면 초록공 치기
 	if btn(4) then
 		if not kick then
 			kick=true
 			kick_ready_t=0
-			circles[1].sx=cos(kick_a)*kick_pow
-			circles[1].sy=sin(kick_a)*kick_pow
+			balls[1].sx=cos(kick_a)*kick_pow
+			balls[1].sy=sin(kick_a)*kick_pow
 		end
 	else kick=false end
 
@@ -547,7 +596,7 @@ function _draw()
 	-- 이동 자국
 	-- 이전 프레임의 자국을 붙여넣은 후 배경색 원, 점을 그려서 조금씩 지우는 방식
 	pasteprevframe()
-	for c in all(circles) do
+	for c in all(balls) do
 		if(not c.is_hole) circfill(c.x,c.y,c.r*0.8,c.c[4])
 	end
 	for i=0,80 do
@@ -570,8 +619,6 @@ function _draw()
 	draw_title(0)
 
 	-- 바깥벽 그림자
-	-- rectfill(0,0,4,sh,c_sd)
-	-- rectfill(4,0,sw,4,c_sd)
 	palt(0,false) palt(8,true)
 	for i=0,15 do
 		local d=flr(i*1.3%2)*2 -- 불규칙적인 높이로
@@ -582,15 +629,9 @@ function _draw()
 	palt()
 
 	-- 구슬 그림자
-	for c in all(circles) do
-		circfill(flr(c.x+2.5),flr(c.y+2.5),c.r-0.5,c_sd)
+	for c in all(balls) do
+		circfill(c.x+3,c.y+3,c.r-0.5,c_sd)
 	end
-
-	-- 심연(사각형 테두리만 - 박스(기둥)와의 앞뒤관계 때문에 먼저 그림)
-	--[[ for b in all(abyss) do
-		local x1,y1,x2,y2=get_box_coords(b)
-		rect(x1,y1,x2,y2,0)
-	end ]]
 
 	-- 박스 그림자
 	palt(0,false) palt(8,true)
@@ -607,7 +648,7 @@ function _draw()
 	palt()
 
 	-- 심연
-	for b in all(abyss) do
+	for b in all(abysses) do
 		local x1,y1,x2,y2=get_box_coords(b)
 		rectfill(x1,y1,x2,y2,0)
 		for i=1,10 do
@@ -640,20 +681,20 @@ function _draw()
 	palt(0,false) palt(11,true)
 	for c in all(holes) do
 		local x,y=flr(c.x+0.5),flr(c.y+0.5)
-		--[[ circ(x+1,y,c.r,4)
-		circ(x,y+1,c.r,4)
-		circ(x,y-1,c.r,5)
-		circ(x-1,y,c.r,5)
-		circfill(x,y,c.r,0)
-		line(x+3,y+5,x+5,y+3,2) ]]
 		sspr(32,0,13,13,x-6,y-6)
 	end
 	palt()
 
 	-- 구슬 그리기
-	for c in all(circles) do draw_circle(c) end
+	for c in all(balls) do
+		draw_ball(c)
+		if(c.hit_c>=2) sfx(0) -- 반짝이는 구슬 있으면 충돌음 낸다
+	end
+
+	-- 이펙트
+	draw_eff()
 	
-	-- 로고 그림자
+	-- 로고 그림자(구슬을 덮음)
 	if(f%2==1) draw_title(0)
 
 	-- 박스 다시 그리기(구슬 앞을 가림)
@@ -670,17 +711,18 @@ function _draw()
 	end
 	palt()
 
-	-- 이펙트
-	draw_eff()
-
 	-- 구슬 치기 가이드
 	if kick_ready_t>0 and f%2==0 then
-		local c=circles[1]
+		local c=balls[1]
 		if(c) draw_dot_line(c.x,c.y,kick_a,2,10+kick_pow*13)
 	end
 
 	-- 로고
 	draw_title(1)
+
+	-- 기타
+	-- local v="v"..ver
+	-- print(v,127-#v*4,121,13)
 
 	-- 디버그용
 	-- print_log() -- debug: log

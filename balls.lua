@@ -1,5 +1,7 @@
 
-ver=0.13 -- 2022-03-01
+ver=0.14 -- 2022-03-02
+-- 딤 처리 기초 구현 완료
+-- 충돌음 교체
 -- todo list:
 -- 박스 충돌체크를 상하좌우 먼저, 모서리를 마지막에 몰아서 처리하자
 -- 화면 스크롤?
@@ -400,6 +402,8 @@ end
 -- 로고 그리기
 function draw_title(n)
 
+	-- do return end
+
 	local x,y=4,8
 	local s="\^w\^tdungeon&pool"
 
@@ -425,16 +429,16 @@ function draw_title(n)
 		print("\^w\^t&",x+56,y,4)
 
 		-- 반짝임
-		local s1="dungeon&pool                             "
-		local s2="\^w\^t"
-		for i=1,#s1 do
-			s2..=((flr(f/8)%#s1+1==i) and s1[i] or " ")
+		if true then
+			local s1="dungeon&pool"
+			local s2="\^w\^t"
+			for i=1,#s1 do
+				s2..=((flr(f/3)%#s1+1==i) and s1[i] or " ")
+			end
+			print(s2,x,y+1,6)
+			print(s2,x,y,rnd{10,12,14,7})
 		end
-		-- print(s2,x,y+1,6)
-		-- print(s2,x,y,14)
-		-- todo: 위 print 2개를 같이 쓰면 f가 매프레임 2씩 증가하는 요상한 문제가 있다??????
-		-- 그래서 f로 처리하는 가이드 점선이 이상하게 보이는 현상이 발생
-		log(f)
+		
 	end
 end
 
@@ -448,6 +452,11 @@ hit_count=0 -- 디버그용
 eff={} -- 출력할 이펙트들
 
 function _init()
+	-- 팔레트는 보너스 색상과 섞어서 사용
+	-- https://www.lexaloffle.com/bbs/?pid=68190#p
+	-- pal({[0]=128,129,6,131,13,133,3,7,136,5,138,139,14,141,142,15},1)
+	pal({[0]=128,130,6,131,13,133,3,7,136,5,138,139,14,141,142,15},1)
+
 	cls(c_bg)
 	copyprevframe()
 
@@ -455,13 +464,11 @@ function _init()
 	local colors={}
 	colors[1]={3,6,11,6} -- 녹색(어두운,중간,하이라이트,이동자국)
 	colors[2]={8,14,15,8} -- 주황색
-	-- colors[3]={2,13,12,5} -- 포도색
 	colors[3]={5,13,12,4} -- 포도색
 
 	-- 홀 추가
 	holes={}
 	add(holes,{x=104,y=64,r=5})
-	-- add(holes,{x=20,y=108,r=5})
 
 	-- 구슬 여럿 추가
 	balls={}
@@ -477,23 +484,6 @@ function _init()
 	add(balls,{x=84,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 	add(balls,{x=84,y=64+18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 
-	-- 임시로 모든 공에 공통 값 추가
-	-- for c in all(balls) do
-	-- 	c.is_ssok=false
-	-- end
-
-	--[[ for i=1,0 do
-		local c={}
-		c.x=14+(i-1)%5*24
-		c.y=20+flr((i-1)/5)*30
-		c.r=5
-		c.c=colors[min(i,3)]
-		local dir,spd=rnd(),1.6+i*0.1
-		c.sx=cos(dir)*spd
-		c.sy=sin(dir)*spd
-		c.hit_c=0
-		add(balls,c)
-	end ]]
 	abysses={}
 	add(abysses,{14,0,2,4})
 	add(abysses,{1,12,4,3})
@@ -502,7 +492,6 @@ function _init()
 	-- 박스 추가
 	boxes={}
 	add(boxes,{0,0,7,1})
-	-- add(boxes,{0,1,2,2})
 	add(boxes,{13,0,1,5})
 	add(boxes,{14,4,3,1})
 	add(boxes,{0,11,4,1})
@@ -511,10 +500,6 @@ function _init()
 	add(boxes,{9,11,4,1})
 	add(boxes,{0,12,1,3})
 	add(boxes,{0,15,9,1})
-
-	-- 팔레트는 보너스 색상과 섞어서 사용
-	-- https://www.lexaloffle.com/bbs/?pid=68190#p
-	pal({[0]=128,129,6,131,13,133,3,7,136,5,138,139,14,141,142,15},1)
 end
 
 kick=false
@@ -590,8 +575,24 @@ function _update60()
 	kick_a_acc=abs(kick_a_acc)<0.0006 and 0 or kick_a_acc*0.80
 end
 
+use_dim=false
 function _draw()
-	cls(c_bg)
+
+	-- cls(c_bg)
+
+	-- [임시] X키로 딤 처리 토글
+	if btnp(5) then
+		use_dim=not use_dim
+		log(use_dim)
+	end
+
+	if use_dim then
+		-- local dim_pal=split("0,9,5,9,0,5,9,5,5,9,9,9,5,5,9,0")
+		-- local dim_pal=split("0,9,0,9,0,5,9,0,9,9,9,9,5,5,9,0")
+			--  local dim_pal=split("0,9,5,9,5,5,9,5,9,9,9,9,5,5,9,0")
+			 local dim_pal=split("1,9,5,9,5,5,9,5,9,9,9,9,5,5,9,1")
+		pal(dim_pal,0)
+	end
 
 	-- 이동 자국
 	-- 이전 프레임의 자국을 붙여넣은 후 배경색 원, 점을 그려서 조금씩 지우는 방식
@@ -717,12 +718,19 @@ function _draw()
 		if(c) draw_dot_line(c.x,c.y,kick_a,2,10+kick_pow*13)
 	end
 
+
+
+
+
+	-- 팔레트 복원
+	pal({1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,0},0)
+
 	-- 로고
 	draw_title(1)
 
 	-- 기타
-	-- local v="v"..ver
-	-- print(v,127-#v*4,121,13)
+	local v="v"..ver
+	print(v,127-#v*4,121,5)
 
 	-- 디버그용
 	-- print_log() -- debug: log

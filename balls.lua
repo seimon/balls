@@ -1,11 +1,16 @@
 
-ver=0.14 -- 2022-03-02
--- 딤 처리 기초 구현 완료
--- 충돌음 교체
+ver=0.15 -- 2022-03-03
+-- 타이틀 화면 간단히 꾸밈
+-- X키 눌러서 타이틀<->게임 전환하는 임시 구현
+-- 딤 처리 전환 연출 추가
+-- 구슬이 0개일 때의 처리 추가
+
 -- todo list:
 -- 박스 충돌체크를 상하좌우 먼저, 모서리를 마지막에 몰아서 처리하자
 -- 화면 스크롤?
 -- 소리
+
+
 
 sw,sh=128,128
 cx,cy=sw/2,sh/2
@@ -404,6 +409,64 @@ function draw_title(n)
 
 	-- do return end
 
+	-- local x,y=4,8
+	local x,y=37,40
+	local s="\^w\^tdungeon\n \|h&pool"
+
+	x+=cos(t()*0.6)*2
+	y+=sin(t()*0.6)*2
+
+	-- 그림자
+	if n==0 then
+		local d=6
+		print(s,x+d-1,y+d,0)
+		print(s,x+d,y+d,0)
+	end
+
+	-- 글자
+	if n==1 then
+
+		-- 외곽선
+		print(s,x+1,y,0)
+		print(s,x-1,y-2,0)
+		print(s,x+1,y-2,0)
+		print(s,x-1,y+2,0)
+		print(s,x+1,y+2,0)
+
+		-- 글자 본체
+		print(s,x,y+1,3)
+		print(s,x,y-1,14)
+		print(s,x,y,8)
+		
+		-- &
+		print("\^w\^t&",x+8,y+12,2)
+		print("\^w\^t&",x+8,y+13,4)
+
+		-- highlight
+		pset(x,y-1,15)
+		pset(x+8,y-1,15)
+		pset(x+12,y-1,15)
+		pset(x+16,y-1,15)
+		pset(x+24,y+1,15)
+		pset(x+26,y-1,15)
+		pset(x+32,y-1,15)
+		pset(x+40,y+1,15)
+		pset(x+42,y-1,15)
+		pset(x+48,y-1,15)
+		pset(x+16,y+12,15)
+		pset(x+24,y+14,15)
+		pset(x+26,y+12,15)
+		pset(x+32,y+14,15)
+		pset(x+34,y+12,15)
+		pset(x+40,y+12,15)
+	end
+end
+
+-- 로고 그리기
+function draw_title_old(n)
+
+	-- do return end
+
 	local x,y=4,8
 	local s="\^w\^tdungeon&pool"
 
@@ -442,6 +505,16 @@ function draw_title(n)
 	end
 end
 
+-- 글자 외곽선 + 그림자
+function print2(s,x,y,c,c_out,c_shadow)
+	print(s,x+3,y+3,c_shadow)
+	print(s,x-1,y,c_out)
+	print(s,x+1,y,c_out)
+	print(s,x,y-1,c_out)
+	print(s,x,y+1,c_out)
+	print(s,x,y,c)
+end
+
 -- 기타 (끝)
 -------------------------------------------------------------------------------
 
@@ -450,6 +523,16 @@ end
 
 hit_count=0 -- 디버그용
 eff={} -- 출력할 이펙트들
+
+function gg_reset()
+	gg={
+		is_title=true,
+		is_playing=false,
+		use_dim=true,
+		dim_pow=16,
+	}
+end
+gg_reset()
 
 function _init()
 	-- 팔레트는 보너스 색상과 섞어서 사용
@@ -507,7 +590,7 @@ kick_ready_t=0
 kick_a=0
 kick_a_acc=0
 kick_pow_min=0.4
-kick_pow_max=3.6
+kick_pow_max=3.2
 kick_pow=kick_pow_max
 
 function _update60()
@@ -548,49 +631,58 @@ function _update60()
 			add(eff,c) del(balls,c)
 		end
 	end
-	
-	-- Z 누르면 초록공 치기
-	if btn(4) then
-		if not kick then
-			kick=true
-			kick_ready_t=0
-			balls[1].sx=cos(kick_a)*kick_pow
-			balls[1].sy=sin(kick_a)*kick_pow
-		end
-	else kick=false end
 
-	-- 화살표 키
-	if btn(0) or btn(1) or btn(2) or btn(3) then
-		kick_ready_t=60
-		-- 좌우 키로 각도
-		if btn(0) then kick_a_acc=min(0.4,kick_a_acc+0.0015)
-		elseif btn(1) then kick_a_acc=max(-0.4,kick_a_acc-0.0015) end
-		-- 상하 키로 파워
-		if btn(2) then kick_pow+=(kick_pow_max-kick_pow)*0.04
-		elseif btn(3) then kick_pow+=(kick_pow_min-kick_pow)*0.04 end
-	else
-		kick_ready_t=max(0,kick_ready_t-1)
+	-- 플레이 중의 조작
+	if gg.is_playing then
+		-- Z 누르면 초록공 치기
+		if btn(4) then
+			if not kick and #balls>0 then
+				kick=true
+				kick_ready_t=0
+				balls[1].sx=cos(kick_a)*kick_pow
+				balls[1].sy=sin(kick_a)*kick_pow
+			end
+		else kick=false end
+
+		-- 화살표 키
+		if btn(0) or btn(1) or btn(2) or btn(3) then
+			kick_ready_t=60
+			-- 좌우 키로 각도
+			if btn(0) then kick_a_acc=min(0.4,kick_a_acc+0.0015)
+			elseif btn(1) then kick_a_acc=max(-0.4,kick_a_acc-0.0015) end
+			-- 상하 키로 파워
+			if btn(2) then kick_pow+=(kick_pow_max-kick_pow)*0.04
+			elseif btn(3) then kick_pow+=(kick_pow_min-kick_pow)*0.04 end
+		else
+			kick_ready_t=max(0,kick_ready_t-1)
+		end
+		kick_a+=kick_a_acc
+		kick_a_acc=abs(kick_a_acc)<0.0006 and 0 or kick_a_acc*0.80
 	end
-	kick_a+=kick_a_acc
-	kick_a_acc=abs(kick_a_acc)<0.0006 and 0 or kick_a_acc*0.80
+
 end
 
-use_dim=false
 function _draw()
 
 	-- cls(c_bg)
 
 	-- [임시] X키로 딤 처리 토글
-	if btnp(5) then
+	--[[ if btnp(5) then
 		use_dim=not use_dim
 		log(use_dim)
-	end
+	end ]]
 
-	if use_dim then
-		-- local dim_pal=split("0,9,5,9,0,5,9,5,5,9,9,9,5,5,9,0")
-		-- local dim_pal=split("0,9,0,9,0,5,9,0,9,9,9,9,5,5,9,0")
-			--  local dim_pal=split("0,9,5,9,5,5,9,5,9,9,9,9,5,5,9,0")
-			 local dim_pal=split("1,9,5,9,5,5,9,5,9,9,9,9,5,5,9,1")
+	-- 타이틀 화면에서는 딤 처리
+	if gg.dim_pow>0 then
+
+		if gg.use_dim then gg.dim_pow=min(gg.dim_pow+1,16)
+		else gg.dim_pow=max(gg.dim_pow-1,0) end
+		
+		local s="1,9,5,9,5,5,9,5,9,9,9,9,5,5,9,1"
+		s=sub(s,1,1+gg.dim_pow*2)
+		local dim_pal=split(s)
+		-- local dim_pal=split("1,9,5,9,5,5,9,5,9,9,9,9,5,5,9,1")
+
 		pal(dim_pal,0)
 	end
 
@@ -617,7 +709,7 @@ function _draw()
 	end
 
 	-- 로고 그림자
-	draw_title(0)
+	-- draw_title(0)
 
 	-- 바깥벽 그림자
 	palt(0,false) palt(8,true)
@@ -696,7 +788,7 @@ function _draw()
 	draw_eff()
 	
 	-- 로고 그림자(구슬을 덮음)
-	if(f%2==1) draw_title(0)
+	-- if(f%2==1) draw_title(0)
 
 	-- 박스 다시 그리기(구슬 앞을 가림)
 	palt(0,false) palt(8,true)
@@ -718,19 +810,58 @@ function _draw()
 		if(c) draw_dot_line(c.x,c.y,kick_a,2,10+kick_pow*13)
 	end
 
-
-
-
-
-	-- 팔레트 복원
+	-- (딤 처리를 했었다면) 팔레트 복원
 	pal({1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,0},0)
 
-	-- 로고
-	draw_title(1)
+	-- 비네팅
+	--[[ for i=0,4 do
+		if i>3 then fillp(0b1011111111101111.1)
+		elseif i>2 then fillp(0b1010111110101111.1)
+		elseif i>1 then fillp(0b1010010110100101.1)
+		elseif i>0 then fillp(0b0001010000010100.1)
+		else fillp() end
+		rectfill(0,0+i*6,127,5+i*6,0)
+		rectfill(0,122-i*6,127,127-i*6,0)
+	end
+	fillp() ]]
 
-	-- 기타
-	local v="v"..ver
-	print(v,127-#v*4,121,5)
+	-- 타이틀 화면이라면?
+	if gg.is_title then
+
+		-- x키 눌러서 게임 시작
+		if btnp(5) then
+			gg.is_title=false
+			gg.is_playing=true
+			gg.use_dim=false
+		end
+
+		-- 로고
+		draw_title(0)
+		draw_title(1)
+
+		-- 글자
+		if true then
+			local x,y=32,75
+			x-=cos(t()*0.6)*2
+			y-=sin(t()*0.6)*2
+			print2("press ❎ to play",x,y,7,0,0)
+			print("❎",x+24,y,10)
+		end
+
+		-- 기타
+		local v="v"..ver
+		print(v,127-#v*4,121,5)
+
+	elseif gg.dim_pow<=0 then
+
+		if btnp(5) then
+			gg.is_title=true
+			gg.is_playing=false
+			gg.use_dim=true
+			gg.dim_pow=max(1,gg.dim_pow)
+		end
+
+	end
 
 	-- 디버그용
 	-- print_log() -- debug: log

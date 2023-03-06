@@ -1,5 +1,9 @@
 
-ver=0.15 -- 2022-03-03
+ver=0.17 -- 2022-03-06
+-- 박스 충돌체크를 상하좌우 먼저, 모서리를 마지막에 몰아서 처리하자
+-- 기본 소리 적용
+-- 조작이 비정상 상태가 돼버림...
+
 -- 타이틀 화면 간단히 꾸밈
 -- X키 눌러서 타이틀<->게임 전환하는 임시 구현
 -- 딤 처리 전환 연출 추가
@@ -36,15 +40,16 @@ function log(s) add(log_txt,s) end
 
 -- 공과 벽의 충돌 처리
 function bouncing_wall(c,w,h)
-	if(c.x<c.r) c.sx*=-1 c.x+=(c.r-c.x)*2 c.hit_c=3
-	if(c.x>w-c.r) c.sx*=-1 c.x-=(c.r-(w-c.x))*2  c.hit_c=3
-	if(c.y<c.r) c.sy*=-1 c.y+=(c.r-c.y)*2  c.hit_c=3
-	if(c.y>h-c.r) c.sy*=-1 c.y-=(c.r-(h-c.y))*2  c.hit_c=3
+	if(c.x<c.r) c.sx*=-1 c.x+=(c.r-c.x)*2 c.hit_c=3 return 1
+	if(c.x>w-c.r) c.sx*=-1 c.x-=(c.r-(w-c.x))*2  c.hit_c=3 return 1
+	if(c.y<c.r) c.sy*=-1 c.y+=(c.r-c.y)*2  c.hit_c=3 return 1
+	if(c.y>h-c.r) c.sy*=-1 c.y-=(c.r-(h-c.y))*2  c.hit_c=3 return 1
+	return 0
 end
 
 -- 공과 점의 충돌 처리
 function bouncing_point(c,px,py)
-	if((px-c.x)^2+(py-c.y)^2>c.r^2) return
+	if((px-c.x)^2+(py-c.y)^2>c.r^2) return 0
 
 	-- [정확히 충돌한 시점으로 되돌리기]
 	-- 현재 좌표의 거리, 1프레임 전 좌표간 거리, 거리를 활용해서 실제 충돌 지점을 산출한다.
@@ -88,11 +93,15 @@ function bouncing_point(c,px,py)
 		c.x+=c.sx*r_to_hit
 		c.y+=c.sy*r_to_hit
 	end
+
+	return 1
 end
 
 -- 공과 박스의 충돌 처리
--- todo: 상하좌우 충돌부터 먼저 처리를 끝낸 후에 모서리 처리를 모아서 해야 함
 function bouncing_boxes(c)
+	local hit_count=0
+
+	-- 상하좌우 충돌부터 먼저 처리(박스들이 붙어있을 때 모서리 충돌하는 문제 때문)
 	for b in all(boxes) do
 		local x1,y1,x2,y2=get_box_coords(b)
 		-- 좌우 + 모서리
@@ -102,17 +111,13 @@ function bouncing_boxes(c)
 					c.sx*=-1
 					c.x-=(c.x+c.r-x1)*2
 					c.hit_c=3
+					hit_count+=1
 				elseif c.x>x2 and c.x-c.r<x2 then
 					c.sx*=-1
 					c.x+=(x2-c.x+c.r)*2
 					c.hit_c=3
+					hit_count+=1
 				end
-			elseif c.y<=y1 then -- 상단 모서리
-				if c.x<=x1 then bouncing_point(c,x1,y1) -- 좌상 
-				elseif c.x>=x2 then bouncing_point(c,x2,y1) end -- 우상
-			else -- 하단 모서리
-				if c.x<=x1 then bouncing_point(c,x1,y2) -- 좌하
-				elseif c.x>=x2 then bouncing_point(c,x2,y2) end -- 우하
 			end
 		end
 		-- 상하
@@ -121,13 +126,31 @@ function bouncing_boxes(c)
 				c.sy*=-1
 				c.y-=(c.y+c.r-y1)*2
 				c.hit_c=3
+				hit_count+=1
 			elseif c.y>y2 and c.y-c.r<y2 then
 				c.sy*=-1
 				c.y+=(y2-c.y+c.r)*2
 				c.hit_c=3
+				hit_count+=1
 			end
 		end
 	end
+
+	-- 모서리 충돌
+	for b in all(boxes) do
+		local x1,y1,x2,y2=get_box_coords(b)
+		if c.y+c.r>y1 and c.y-c.r<y2 then
+			if c.y<=y1 then -- 상단 모서리
+				if c.x<=x1 then hit_count+=bouncing_point(c,x1,y1) -- 좌상 
+				elseif c.x>=x2 then hit_count+=bouncing_point(c,x2,y1) end -- 우상
+			else -- 하단 모서리
+				if c.x<=x1 then hit_count+=bouncing_point(c,x1,y2) -- 좌하
+				elseif c.x>=x2 then hit_count+=bouncing_point(c,x2,y2) end -- 우하
+			end
+		end
+	end
+
+	return hit_count
 end
 
 -- 공과 홀의 충돌 처리
@@ -165,10 +188,10 @@ end
 -- 두 공의 충돌 처리(질량은 동일하다고 가정)
 function ball_collision(c1,c2)
 	local rr=c1.r+c2.r
-	if(abs(c1.x-c2.x)>rr or abs(c1.y-c2.y)>rr) return -- x, y 좌표 거리가 멀면 충돌 아님
+	if(abs(c1.x-c2.x)>rr or abs(c1.y-c2.y)>rr) return 0 -- x, y 좌표 거리가 멀면 충돌 아님
 	local dx,dy=c2.x-c1.x,c2.y-c1.y
 	local dd=dx*dx+dy*dy
-	if(dd>rr*rr) return -- 거리가 두 원의 반지름 합보다 짧아야 충돌(제곱근 사용하지 않고 판정부터 빠르게)
+	if(dd>rr*rr) return 0 -- 거리가 두 원의 반지름 합보다 짧아야 충돌(제곱근 사용하지 않고 판정부터 빠르게)
 	
 	-- 여기부터는 충돌 후 처리
 	
@@ -250,6 +273,8 @@ function ball_collision(c1,c2)
 	local pow=max(abs(spd_c1_to_c2),abs(spd_c2_to_c1))
 	if(pow>0.1) c1.hit_c=3 c2.hit_c=3 -- 구슬 반짝임
 	if(pow>0.6) add_hit_eff((c1.x+c2.x)/2,(c1.y+c2.y)/2,a_hit+0.25,{c1.c[3],c2.c[3],7},pow)
+
+	return 1
 end
 
 -- 물리 처리 (끝)
@@ -537,7 +562,6 @@ gg_reset()
 function _init()
 	-- 팔레트는 보너스 색상과 섞어서 사용
 	-- https://www.lexaloffle.com/bbs/?pid=68190#p
-	-- pal({[0]=128,129,6,131,13,133,3,7,136,5,138,139,14,141,142,15},1)
 	pal({[0]=128,130,6,131,13,133,3,7,136,5,138,139,14,141,142,15},1)
 
 	cls(c_bg)
@@ -570,7 +594,7 @@ function _init()
 	abysses={}
 	add(abysses,{14,0,2,4})
 	add(abysses,{1,12,4,3})
-	add(abysses,{9,12,7,4})
+	add(abysses,{10,12,7,4})
 	
 	-- 박스 추가
 	boxes={}
@@ -580,9 +604,9 @@ function _init()
 	add(boxes,{0,11,4,1})
 	add(boxes,{4,5,2,2})
 	add(boxes,{4,7,1,5})
-	add(boxes,{9,11,4,1})
+	add(boxes,{10,11,3,1})
 	add(boxes,{0,12,1,3})
-	add(boxes,{0,15,9,1})
+	add(boxes,{0,15,10,1})
 end
 
 kick=false
@@ -596,17 +620,25 @@ kick_pow=kick_pow_max
 function _update60()
 	f+=1
 
+	-- 공과 공, 공과 벽이 충돌한 횟수(소리 출력용)
+	local hit_times_b2b=0
+	local hit_times_b2w=0
+
 	-- 충돌 처리
 	for i=1,#balls do
 		local c=balls[i]
-		bouncing_wall(c,sw,sh) -- 공과 벽 충돌
-		bouncing_boxes(c) -- 공과 박스 충돌
+		hit_times_b2w+=bouncing_wall(c,sw,sh) -- 공과 벽 충돌
+		hit_times_b2w+=bouncing_boxes(c) -- 공과 박스 충돌
 		if i>1 then -- 공끼리 충돌
 			for j=1,i-1 do
 				local c2=balls[j]
-				ball_collision(c,c2)
+				hit_times_b2b+=ball_collision(c,c2)
 			end
 		end
+
+		-- 충돌했으면 효과음 출력
+		if hit_times_b2b>0 then sfx(0) end
+		if hit_times_b2w>0 then sfx(1) end
 
 		-- 홀에 들어갔는지?
 		-- todo: 홀 1번만 체크하고 있음
@@ -621,14 +653,16 @@ function _update60()
 		if(c.sy!=0) c.sy=abs(c.sy)<0.05 and 0 or c.sy*0.988
 	end
 
-	-- 홀/심연에 들어간 공은 지운다 + 이펙트 추가
+	-- 홀/심연에 들어간 공은 지운다 + 소리/이펙트 추가
 	for c in all(balls) do
 		if c.is_ssok then
 			c.type,c.eff_timer="ball_ssok",30
 			add(eff,c) del(balls,c)
+			sfx(3)
 		elseif c.is_dive then
 			c.type,c.eff_timer="ball_dive",30
 			add(eff,c) del(balls,c)
+			sfx(4)
 		end
 	end
 
@@ -641,6 +675,7 @@ function _update60()
 				kick_ready_t=0
 				balls[1].sx=cos(kick_a)*kick_pow
 				balls[1].sy=sin(kick_a)*kick_pow
+				sfx(2)
 			end
 		else kick=false end
 
@@ -781,7 +816,7 @@ function _draw()
 	-- 구슬 그리기
 	for c in all(balls) do
 		draw_ball(c)
-		if(c.hit_c>=2) sfx(0) -- 반짝이는 구슬 있으면 충돌음 낸다
+		-- if(c.hit_c>=2) sfx(0) -- 반짝이는 구슬 있으면 충돌음 낸다
 	end
 
 	-- 이펙트
@@ -864,7 +899,7 @@ function _draw()
 	end
 
 	-- 디버그용
-	-- print_log() -- debug: log
+	print_log() -- debug: log
 	-- draw_color_table()
 	-- if(hit_count>0) stop() -- debug: 일단 멈춰보자...
 end

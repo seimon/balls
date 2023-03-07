@@ -1,9 +1,17 @@
 
-ver=0.17 -- 2022-03-06
--- 박스 충돌체크를 상하좌우 먼저, 모서리를 마지막에 몰아서 처리하자
+ver=0.18 -- 2022-03-07
+-- v0.18
+-- 타일 좌표 설정 최적화(매번 좌표 *8 처리하던 걸 제거)
+-- 바닥 타일 최적화(듬성듬성 찍음)
+-- 타이틀 그리는 것도 조금 간소화
+-- 홀에 들어갔을 때 이펙트
+
+-- v0.17
+-- 박스 충돌체크를 상하좌우 먼저, 모서리를 마지막에 몰아서 처리
 -- 기본 소리 적용
 -- 조작이 비정상 상태가 돼버림...
 
+-- v0.14
 -- 타이틀 화면 간단히 꾸밈
 -- X키 눌러서 타이틀<->게임 전환하는 임시 구현
 -- 딤 처리 전환 연출 추가
@@ -75,9 +83,6 @@ function bouncing_point(c,px,py)
 		a_hit=atan2(px-c.x,py-c.y)
 		c.x-=cos(a_hit)*push_dist
 		c.y-=sin(a_hit)*push_dist
-
-		-- debug: 초록공이면 멈춰보자
-		-- if(c.is_player) hit_count=1
 	end
 
 	local spd=sqrt(c.sx^2+c.sy^2)
@@ -135,6 +140,8 @@ function bouncing_boxes(c)
 			end
 		end
 	end
+
+	if(hit_count>0) return hit_count
 
 	-- 모서리 충돌
 	for b in all(boxes) do
@@ -389,6 +396,10 @@ function draw_eff()
 				e.x+=e.sx+(e.tx-e.x)*0.2
 				e.y+=e.sy+(e.ty-e.y)*0.2
 			end
+		elseif e.type=="ssok" then
+			local r=e.eff_timer/30
+			if(f%2==0) circ(e.x+2,e.y+2,5+(1-r)*12,c_sd)
+			circ(e.x,e.y,5+(1-r)*12,e.c)
 		elseif e.type=="hit" then
 			pset(e.x,e.y,e.c)
 			e.x+=e.sx
@@ -424,17 +435,15 @@ end
 
 -- 박스 데이타 4개 좌표 뽑기
 function get_box_coords(b)
-	local x1,y1=b[1]*8,b[2]*8
+	return b[1],b[2],b[3],b[4]
+	--[[ local x1,y1=b[1]*8,b[2]*8
 	local x2,y2=x1+b[3]*8,y1+b[4]*8
-	return x1,y1,x2,y2
+	return x1,y1,x2,y2 ]]
 end
 
 -- 로고 그리기
-function draw_title(n)
+function draw_title()
 
-	-- do return end
-
-	-- local x,y=4,8
 	local x,y=37,40
 	local s="\^w\^tdungeon\n \|h&pool"
 
@@ -442,15 +451,14 @@ function draw_title(n)
 	y+=sin(t()*0.6)*2
 
 	-- 그림자
-	if n==0 then
+	do
 		local d=6
 		print(s,x+d-1,y+d,0)
 		print(s,x+d,y+d,0)
 	end
 
 	-- 글자
-	if n==1 then
-
+	do
 		-- 외곽선
 		print(s,x+1,y,0)
 		print(s,x-1,y-2,0)
@@ -468,75 +476,26 @@ function draw_title(n)
 		print("\^w\^t&",x+8,y+13,4)
 
 		-- highlight
-		pset(x,y-1,15)
-		pset(x+8,y-1,15)
-		pset(x+12,y-1,15)
-		pset(x+16,y-1,15)
-		pset(x+24,y+1,15)
-		pset(x+26,y-1,15)
-		pset(x+32,y-1,15)
-		pset(x+40,y+1,15)
-		pset(x+42,y-1,15)
-		pset(x+48,y-1,15)
-		pset(x+16,y+12,15)
-		pset(x+24,y+14,15)
-		pset(x+26,y+12,15)
-		pset(x+32,y+14,15)
-		pset(x+34,y+12,15)
-		pset(x+40,y+12,15)
-	end
-end
-
--- 로고 그리기
-function draw_title_old(n)
-
-	-- do return end
-
-	local x,y=4,8
-	local s="\^w\^tdungeon&pool"
-
-	x+=cos(t()*0.6)*2
-	y+=sin(t()*0.6)*2
-
-	-- 그림자
-	if n==0 then
-		local d=5
-		print(s,x+d-1,y+d,c_sd)
-		print(s,x+d,y+d,c_sd)
-	end
-
-	-- 글자
-	if n==1 then
-		print(s,x+1,y,0)
-		print(s,x-1,y-1,0)
-		print(s,x+1,y-1,0)
-		print(s,x-1,y+2,0)
-		print(s,x+1,y+2,0)
-		print(s,x,y+1,3)
-		print(s,x,y,8)
-		print("\^w\^t&",x+56,y,4)
-
-		-- 반짝임
-		if true then
-			local s1="dungeon&pool"
-			local s2="\^w\^t"
-			for i=1,#s1 do
-				s2..=((flr(f/3)%#s1+1==i) and s1[i] or " ")
-			end
-			print(s2,x,y+1,6)
-			print(s2,x,y,rnd{10,12,14,7})
+		local p_s="0,-1,8,-1,12,-1,16,-1,24,1,26,-1,32,-1,40,1,42,-1,48,-1,16,12,24,14,26,12,32,14,34,12,40,12"
+		local p=split(p_s)
+		for i=1,#p,2 do
+			pset(x+p[i],y+p[i+1],15)
 		end
-		
+		pset(x+8,y+12,7)
+		pset(x+8,y+18,7)
 	end
 end
 
--- 글자 외곽선 + 그림자
+-- 글자 + 그림자
 function print2(s,x,y,c,c_out,c_shadow)
+	-- print(s,x+3,y+3,c_shadow)
+	-- print(s,x-1,y,c_out)
+	-- print(s,x+1,y,c_out)
+	-- print(s,x,y-1,c_out)
+	-- print(s,x,y+1,c_out)
+	-- rectfill(x-1,y-1,x+#s*4+3,y+5,c_out)
 	print(s,x+3,y+3,c_shadow)
-	print(s,x-1,y,c_out)
-	print(s,x+1,y,c_out)
-	print(s,x,y-1,c_out)
-	print(s,x,y+1,c_out)
+	-- print(s,x+1,y+1,c_shadow)
 	print(s,x,y,c)
 end
 
@@ -607,6 +566,21 @@ function _init()
 	add(boxes,{10,11,3,1})
 	add(boxes,{0,12,1,3})
 	add(boxes,{0,15,10,1})
+
+	-- 심연, 박스는 16x16 타일로 배치하는 걸로 가정하고 좌표를 적었음
+	-- 그 좌표를 실제 좌표로 미리 바꿔둔다(실시간으로 하니까 꽤 무거워서)
+	for i=1,#abysses do
+		local b=abysses[i]
+		local x1,y1=b[1]*8,b[2]*8
+		local x2,y2=x1+b[3]*8,y1+b[4]*8
+		abysses[i]={x1,y1,x2,y2}
+	end
+	for i=1,#boxes do
+		local b=boxes[i]
+		local x1,y1=b[1]*8,b[2]*8
+		local x2,y2=x1+b[3]*8,y1+b[4]*8
+		boxes[i]={x1,y1,x2,y2}
+	end
 end
 
 kick=false
@@ -637,8 +611,8 @@ function _update60()
 		end
 
 		-- 충돌했으면 효과음 출력
-		if hit_times_b2b>0 then sfx(0) end
-		if hit_times_b2w>0 then sfx(1) end
+		if(hit_times_b2b>0) sfx(0) -- 공끼리 충돌음
+		if(hit_times_b2w>0) sfx(1) -- 벽 충돌음
 
 		-- 홀에 들어갔는지?
 		-- todo: 홀 1번만 체크하고 있음
@@ -657,6 +631,7 @@ function _update60()
 	for c in all(balls) do
 		if c.is_ssok then
 			c.type,c.eff_timer="ball_ssok",30
+			add(eff,{type="ssok",eff_timer=30,x=holes[1].x,y=holes[1].y,c=c.c[3]}) -- todo: 1번 홀만 처리하는 중
 			add(eff,c) del(balls,c)
 			sfx(3)
 		elseif c.is_dive then
@@ -695,17 +670,28 @@ function _update60()
 		kick_a_acc=abs(kick_a_acc)<0.0006 and 0 or kick_a_acc*0.80
 	end
 
+	-- 타이틀 화면이라면? x키 눌러서 게임 시작
+	-- 게임 중이라면 x키 눌러서 타이틀로...(일시정지는 아님)
+	if gg.is_title then
+		if btnp(5) then
+			gg.is_title=false
+			gg.is_playing=true
+			gg.use_dim=false
+		end
+	elseif gg.dim_pow<=0 then
+		if btnp(5) then
+			gg.is_title=true
+			gg.is_playing=false
+			gg.use_dim=true
+			gg.dim_pow=max(1,gg.dim_pow)
+		end
+	end
+
 end
 
 function _draw()
 
 	-- cls(c_bg)
-
-	-- [임시] X키로 딤 처리 토글
-	--[[ if btnp(5) then
-		use_dim=not use_dim
-		log(use_dim)
-	end ]]
 
 	-- 타이틀 화면에서는 딤 처리
 	if gg.dim_pow>0 then
@@ -714,9 +700,8 @@ function _draw()
 		else gg.dim_pow=max(gg.dim_pow-1,0) end
 		
 		local s="1,9,5,9,5,5,9,5,9,9,9,9,5,5,9,1"
-		s=sub(s,1,1+gg.dim_pow*2)
+		s=sub(s,1,1+gg.dim_pow*2) -- 딤을 순차적으로 적용
 		local dim_pal=split(s)
-		-- local dim_pal=split("1,9,5,9,5,5,9,5,9,9,9,9,5,5,9,1")
 
 		pal(dim_pal,0)
 	end
@@ -733,18 +718,13 @@ function _draw()
 	end
 	copyprevframe()
 
-	-- 배경 벽돌 무늬(sspr)
-	for i=0,9 do
-		local y=i*16
-		for j=0,9 do
-			local x=j*16
-			if (i+j)%3==0 then sspr(0,16,16,16,x,y)
-			else sspr(16,16,16,16,x,y) end
+	-- 배경 벽돌 무늬(cpu 0.1 먹음)
+	for i=0,63 do
+		if i%5<2 then
+			local x,y=i%8*16,i\8*16
+			sspr(i%2==0 and 0 or 16,16,16,16,x,y)
 		end
 	end
-
-	-- 로고 그림자
-	-- draw_title(0)
 
 	-- 바깥벽 그림자
 	palt(0,false) palt(8,true)
@@ -814,16 +794,10 @@ function _draw()
 	palt()
 
 	-- 구슬 그리기
-	for c in all(balls) do
-		draw_ball(c)
-		-- if(c.hit_c>=2) sfx(0) -- 반짝이는 구슬 있으면 충돌음 낸다
-	end
+	for c in all(balls) do draw_ball(c) end
 
 	-- 이펙트
 	draw_eff()
-	
-	-- 로고 그림자(구슬을 덮음)
-	-- if(f%2==1) draw_title(0)
 
 	-- 박스 다시 그리기(구슬 앞을 가림)
 	palt(0,false) palt(8,true)
@@ -863,16 +837,8 @@ function _draw()
 	-- 타이틀 화면이라면?
 	if gg.is_title then
 
-		-- x키 눌러서 게임 시작
-		if btnp(5) then
-			gg.is_title=false
-			gg.is_playing=true
-			gg.use_dim=false
-		end
-
 		-- 로고
-		draw_title(0)
-		draw_title(1)
+		draw_title()
 
 		-- 글자
 		if true then
@@ -886,16 +852,6 @@ function _draw()
 		-- 기타
 		local v="v"..ver
 		print(v,127-#v*4,121,5)
-
-	elseif gg.dim_pow<=0 then
-
-		if btnp(5) then
-			gg.is_title=true
-			gg.is_playing=false
-			gg.use_dim=true
-			gg.dim_pow=max(1,gg.dim_pow)
-		end
-
 	end
 
 	-- 디버그용

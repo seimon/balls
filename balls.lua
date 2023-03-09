@@ -1,6 +1,14 @@
 
-ver=0.19 -- 2022-03-08
+ver=0.20 -- 2022-03-09
 --[[ 
+v0.20
+- 비네팅 연출 보강(전환 과정 부드럽게)
+- 타이틀 화면 등장퇴장 사운드 추가
+- 조작 대기 상황 조건 수정(모든 공이 충분히 느려졌을 때)
+- 타이틀 화면이 나올 때는 게임의 움직임과 물리 처리를 멈춤
+- 플레이어 공이 사라졌을 때는 액션 대기하지 않음(게임 진행 불가 상태)
+- todo: 게임오버 상태 만들어야 함
+
 v0.19
 - 비네팅 효과 추가(fillp_step() 최적화 필요)
 
@@ -498,27 +506,9 @@ function print2(s,x,y,c,c_out,c_shadow)
 	print(s,x,y,c)
 end
 
--- fillp() 진하기를 1~15단계로 설정(15단계가 가장 진함)
--- todo: 최적화 필요(값을 16진수로 써도 됨)
-function fillp_step(s)
-	if s>15 then fillp()
-	elseif s==15 then fillp(0b1000000000000000.1)
-	elseif s==14 then fillp(0b1000000010000000.1)
-	elseif s==13 then fillp(0b1010000010000000.1)
-	elseif s==12 then fillp(0b1010000010100000.1)
-	elseif s==11 then fillp(0b1010000110100000.1)
-	elseif s==10 then fillp(0b1010000110100100.1)
-	elseif s==9 then fillp(0b1010010110100100.1)
-	elseif s==8 then fillp(0b1010010110100101.1)
-	elseif s==7 then fillp(0b1011010110100101.1)
-	elseif s==6 then fillp(0b1011010111100101.1)
-	elseif s==5 then fillp(0b1111010111100101.1)
-	elseif s==4 then fillp(0b1111010111110101.1)
-	elseif s==3 then fillp(0b1111011111110101.1)
-	elseif s==2 then fillp(0b1111011111111101.1)
-	elseif s==1 then fillp(0b1111111111111101.1)
-	else fillp(0b1111111111111111.1) end
-end
+-- fillp() 진하기를 1~15단계로 설정(15단계가 가장 진함, 0 이하는 투명, 16 이상은 완전히 채움)
+fill_steps={0xffff.8,0xfffd.8,0xf7fd.8,0xf7f5.8,0xf5f5.8,0xf5e5.8,0xb5e5.8,0xb5a5.8,0xa5a5.8,0xa5a4.8,0xa1a4.8,0xa1a0.8,0xa0a0.8,0xa020.8,0x8020.8,0x8000.8,0x0000.8}
+function fillp_step(s) fillp(fill_steps[min(17,max(1,s+1))]) end
 
 -- 기타 (끝)
 -------------------------------------------------------------------------------
@@ -538,6 +528,7 @@ function gg_reset()
 		is_playing=false,
 		use_dim=true,
 		dim_pow=16,
+		player_ball=nil,
 	}
 end
 gg_reset()
@@ -562,7 +553,8 @@ function _init()
 
 	-- 구슬 여럿 추가
 	balls={}
-	add(balls,{x=12,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true}) -- 초록 구슬
+	gg.player_ball={x=12,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true,wait_action=true}
+	add(balls,gg.player_ball) -- 초록 구슬
 	add(balls,{x=54,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 	add(balls,{x=64,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 	add(balls,{x=64,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
@@ -574,12 +566,13 @@ function _init()
 	add(balls,{x=84,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 	add(balls,{x=84,y=64+18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 
+	-- 심연 추가
 	abysses={}
 	add(abysses,{14,0,2,4})
 	add(abysses,{1,12,4,3})
 	add(abysses,{10,12,7,4})
 	
-	-- 박스 추가
+	-- 박스(벽) 추가
 	boxes={}
 	add(boxes,{0,0,7,1})
 	add(boxes,{13,0,1,5})
@@ -618,55 +611,73 @@ kick_pow=kick_pow_max
 function _update60()
 	f+=1
 
-	-- 공과 공, 공과 벽이 충돌한 횟수(소리 출력용)
-	local hit_times_b2b=0
-	local hit_times_b2w=0
+	-- 플레이 중에만 물리 처리
+	if gg.is_playing then
 
-	-- 충돌 처리
-	for i=1,#balls do
-		local c=balls[i]
-		hit_times_b2w+=bouncing_wall(c,sw,sh) -- 공과 벽 충돌
-		hit_times_b2w+=bouncing_boxes(c) -- 공과 박스 충돌
-		if i>1 then -- 공끼리 충돌
-			for j=1,i-1 do
-				local c2=balls[j]
-				hit_times_b2b+=ball_collision(c,c2)
+		-- 공과 공, 공과 벽이 충돌한 횟수(소리 출력용)
+		local hit_times_b2b=0
+		local hit_times_b2w=0
+
+		-- 가장 느린 공의 속도 기록용
+		local slowest_spd=0
+
+		-- 충돌 처리 + 이동 + 감속
+		for i=1,#balls do
+			local c=balls[i]
+			hit_times_b2w+=bouncing_wall(c,sw,sh) -- 공과 벽 충돌
+			hit_times_b2w+=bouncing_boxes(c) -- 공과 박스 충돌
+			if i>1 then -- 공끼리 충돌
+				for j=1,i-1 do
+					local c2=balls[j]
+					hit_times_b2b+=ball_collision(c,c2)
+				end
 			end
+
+			-- 충돌했으면 효과음 출력
+			if(hit_times_b2b>0) sfx(0) -- 공끼리 충돌음
+			if(hit_times_b2w>0) sfx(1) -- 벽 충돌음
+
+			-- 홀에 들어갔는지?
+			-- todo: 홀 1번만 체크하고 있음
+			c.is_ssok,c.tx,c.ty=collision_hole(c,holes[1])
+
+			-- 심연에 빠졌는지?
+			c.is_dive,c.tx,c.ty=collision_abysses(c)
+			
+			-- 공 이동
+			c.x+=c.sx
+			c.y+=c.sy
+
+			-- 공의 속도가 충분히 느리면 0으로 만들기 + 감속
+			if(c.sx!=0) c.sx=abs(c.sx)<0.05 and 0 or c.sx*0.988
+			if(c.sy!=0) c.sy=abs(c.sy)<0.05 and 0 or c.sy*0.988
+
+			-- 가장 느린 공의 속도 기록
+			slowest_spd=max(max(slowest_spd,abs(c.sx)),abs(c.sy))
 		end
 
-		-- 충돌했으면 효과음 출력
-		if(hit_times_b2b>0) sfx(0) -- 공끼리 충돌음
-		if(hit_times_b2w>0) sfx(1) -- 벽 충돌음
+		-- 모든 공이 충분히 느려지면 액션 대기 상태로...
+		if(slowest_spd<0.1 and gg.player_ball) gg.player_ball.wait_action=true
 
-		-- 홀에 들어갔는지?
-		-- todo: 홀 1번만 체크하고 있음
-		c.is_ssok,c.tx,c.ty=collision_hole(c,holes[1])
-
-		-- 심연에 빠졌는지?
-		c.is_dive,c.tx,c.ty=collision_abysses(c)
-		
-		c.x+=c.sx
-		c.y+=c.sy
-		if(c.sx!=0) c.sx=abs(c.sx)<0.05 and 0 or c.sx*0.988
-		if(c.sy!=0) c.sy=abs(c.sy)<0.05 and 0 or c.sy*0.988
-	end
-
-	-- 홀/심연에 들어간 공은 지운다 + 소리/이펙트 추가
-	for c in all(balls) do
-		if c.is_ssok then
-			c.type,c.eff_timer="ball_ssok",30
-			add(eff,{type="ssok",eff_timer=30,x=holes[1].x,y=holes[1].y,c=c.c[3]}) -- todo: 1번 홀만 처리하는 중
-			add(eff,c) del(balls,c)
-			sfx(3)
-		elseif c.is_dive then
-			c.type,c.eff_timer="ball_dive",30
-			add(eff,c) del(balls,c)
-			sfx(4)
+		-- 홀/심연에 들어간 공은 지운다 + 소리/이펙트 추가
+		for c in all(balls) do
+			if c.is_ssok then
+				c.type,c.eff_timer="ball_ssok",30
+				if(c.is_player) gg.player_ball=nil -- todo: 게임오버 상태 만들어야 한다
+				add(eff,{type="ssok",eff_timer=30,x=holes[1].x,y=holes[1].y,c=c.c[3]}) -- todo: 1번 홀만 처리하는 중
+				add(eff,c) del(balls,c)
+				sfx(3)
+			elseif c.is_dive then
+				c.type,c.eff_timer="ball_dive",30
+				if(c.is_player) gg.player_ball=nil
+				add(eff,c) del(balls,c)
+				sfx(4)
+			end
 		end
 	end
 
 	-- 플레이 중의 조작
-	if gg.is_playing then
+	if gg.is_playing and gg.player_ball and gg.player_ball.wait_action then
 		-- Z 누르면 초록공 치기
 		if btn(4) then
 			if not kick and #balls>0 then
@@ -674,6 +685,7 @@ function _update60()
 				kick_ready_t=0
 				balls[1].sx=cos(kick_a)*kick_pow
 				balls[1].sy=sin(kick_a)*kick_pow
+				gg.player_ball.wait_action=false
 				sfx(2)
 			end
 		else kick=false end
@@ -701,6 +713,7 @@ function _update60()
 			gg.is_title=false
 			gg.is_playing=true
 			gg.use_dim=false
+			sfx(8)
 		end
 	elseif gg.dim_pow<=0 then
 		if btnp(5) then
@@ -708,6 +721,7 @@ function _update60()
 			gg.is_playing=false
 			gg.use_dim=true
 			gg.dim_pow=max(1,gg.dim_pow)
+			sfx(7)
 		end
 	end
 
@@ -786,11 +800,11 @@ function _draw()
 		rectfill(x1,y1,x2,y2,0)
 		for i=1,10 do
 			local x,y=x1+i,y1+i
-			if i>7 then fillp(0b1011111111101111.1)
-			elseif i>4 then fillp(0b1010111110101111.1)
-			elseif i>2 then fillp(0b1010010110100101.1) end
+			if i>8 then fillp_step(2)
+			elseif i>4 then fillp_step(4)
+			elseif i>2 then fillp_step(8) end
 			line(x+1,y,x2-1,y,5) -- 아랫면
-			line(x,y+1,x,y2-1,i<=2 and 13 or 5) -- 옆면
+			line(x,y+1,x,y2-1,i<=3 and 13 or 5) -- 옆면
 			if(i>5 and i<11) line(x-3,y-4+1,x-3,y2-1,13) -- 옆면(더 밝은 부분)
 		end
 		fillp()
@@ -839,9 +853,30 @@ function _draw()
 	palt()
 
 	-- 구슬 치기 가이드
-	if kick_ready_t>0 and f%2==0 then
+	--[[ if kick_ready_t>0 and f%2==0 then
 		local c=balls[1]
 		if(c) draw_dot_line(c.x,c.y,kick_a,2,10+kick_pow*13)
+	end ]]
+	if gg.is_playing and gg.player_ball and gg.player_ball.wait_action and f%2==0 then
+		local x,y=flr(gg.player_ball.x+0.5),flr(gg.player_ball.y+0.5)
+		local r=6
+		circ(x,y,r,10)
+		draw_dot_line(x,y,kick_a,2,10+kick_pow*13)
+	end
+
+	-- 비네팅(cpu 0.09 먹음)
+	if gg.dim_pow>0 then
+		for i=0,15 do
+			for j=0,15 do
+				local d=vntt[i*16+j+1]
+				if d>0 then
+					fillp_step(d+(gg.dim_pow-16))
+					local x,y=j*8,i*8
+					rectfill(x,y,x+7,y+7,1)
+				end
+			end
+		end
+		fillp()
 	end
 
 	-- (딤 처리를 했었다면) 팔레트 복원
@@ -850,20 +885,6 @@ function _draw()
 	-- 타이틀 화면이라면?
 	if gg.is_title then
 
-		-- 비네팅(cpu 0.09 먹음)
-		for i=0,15 do
-			for j=0,15 do
-				local d=vntt[i*16+j+1]
-				if d>0 then
-					fillp_step(d)
-					local x,y=j*8,i*8
-					rectfill(x,y,x+7,y+7,1)
-				end
-			end
-		end
-		fillp()
-
-		-- 로고
 		draw_title()
 
 		-- 글자

@@ -1,6 +1,10 @@
 
-ver=0.20 -- 2022-03-09
+ver=0.21 -- 2022-03-10
 --[[ 
+v0.21
+- 비네팅 전환 과정 더 부드럽게 + 동적인 느낌 추가
+- 타이틀 화면 전환 연출 살짝
+
 v0.20
 - 비네팅 연출 보강(전환 과정 부드럽게)
 - 타이틀 화면 등장퇴장 사운드 추가
@@ -449,17 +453,17 @@ function get_box_coords(b)
 end
 
 -- 로고 그리기
-function draw_title()
+function draw_title(dy)
 
-	local x,y=37,40
-	local s="\^w\^tdungeon\n \|h&pool"
-
-	x+=cos(t()*0.6)*2
-	y+=sin(t()*0.6)*2
+	-- local x,y=37,40+dy
+	-- local s="\^w\^tdungeon\n \|h&pool"
+	local dx,dy=cos(t()*0.5)*4,sin(t()*0.5)*3+dy
+	local x,y=40+dx,40+dy
+	local s="\^w\^td\-fu\-fn\-fg\-fe\-fo\-fn\n \|h&\-fp\-fo\-fo\-fl" -- 자간 좁힘
 
 	-- 그림자
 	do
-		local d=6
+		local d=5
 		print(s,x+d-1,y+d,0)
 		print(s,x+d,y+d,0)
 	end
@@ -483,7 +487,8 @@ function draw_title()
 		print("\^w\^t&",x+8,y+13,4)
 
 		-- highlight
-		local p_s="0,-1,8,-1,12,-1,16,-1,24,1,26,-1,32,-1,40,1,42,-1,48,-1,16,12,24,14,26,12,32,14,34,12,40,12"
+		-- local p_s="0,-1,8,-1,12,-1,16,-1,24,1,26,-1,32,-1,40,1,42,-1,48,-1,16,12,24,14,26,12,32,14,34,12,40,12"
+		local p_s="0,-1,7,-1,11,-1,14,-1,21,1,23,-1,28,-1,35,1,37,-1,42,-1,15,12,22,14,24,12,29,14,31,12,36,12" -- 자간 좁힘
 		local p=split(p_s)
 		for i=1,#p,2 do
 			pset(x+p[i],y+p[i+1],15)
@@ -493,20 +498,22 @@ function draw_title()
 	end
 end
 
--- 글자 + 그림자
-function print2(s,x,y,c,c_out,c_shadow)
-	-- print(s,x+3,y+3,c_shadow)
-	-- print(s,x-1,y,c_out)
-	-- print(s,x+1,y,c_out)
-	-- print(s,x,y-1,c_out)
-	-- print(s,x,y+1,c_out)
-	-- rectfill(x-1,y-1,x+#s*4+3,y+5,c_out)
+-- 글자 + 외곽선 + 그림자
+function printos(s,x,y,c,c_out,c_shadow)
 	print(s,x+3,y+3,c_shadow)
-	-- print(s,x+1,y+1,c_shadow)
+	print(s,x-1,y,c_out)
+	print(s,x+1,y,c_out)
+	print(s,x,y-1,c_out)
+	print(s,x,y+1,c_out)
+	print(s,x,y,c)
+end
+-- 글자 + 그림자
+function prints(s,x,y,c,c_out,c_shadow)
+	print(s,x+3,y+3,c_shadow)
 	print(s,x,y,c)
 end
 
--- fillp() 진하기를 1~15단계로 설정(15단계가 가장 진함, 0 이하는 투명, 16 이상은 완전히 채움)
+-- fillp()의 진하기를 1~15단계로 설정(15단계가 가장 진함, 0 이하는 투명, 16 이상은 완전히 채움)
 fill_steps={0xffff.8,0xfffd.8,0xf7fd.8,0xf7f5.8,0xf5f5.8,0xf5e5.8,0xb5e5.8,0xb5a5.8,0xa5a5.8,0xa5a4.8,0xa1a4.8,0xa1a0.8,0xa0a0.8,0xa020.8,0x8020.8,0x8000.8,0x0000.8}
 function fillp_step(s) fillp(fill_steps[min(17,max(1,s+1))]) end
 
@@ -527,7 +534,7 @@ function gg_reset()
 		is_title=true,
 		is_playing=false,
 		use_dim=true,
-		dim_pow=16,
+		dim_pow=16, -- 1~16
 		player_ball=nil,
 	}
 end
@@ -733,15 +740,12 @@ function _draw()
 
 	-- 타이틀 화면에서는 딤 처리
 	if gg.dim_pow>0 then
-
 		if gg.use_dim then gg.dim_pow=min(gg.dim_pow+1,16)
 		else gg.dim_pow=max(gg.dim_pow-1,0) end
-		
+
 		local s="1,9,5,9,5,5,9,5,9,9,9,9,5,5,9,1"
 		s=sub(s,1,1+gg.dim_pow*2) -- 딤을 순차적으로 적용
-		local dim_pal=split(s)
-
-		pal(dim_pal,0)
+		pal(split(s),0)
 	end
 
 	-- 이동 자국
@@ -853,10 +857,6 @@ function _draw()
 	palt()
 
 	-- 구슬 치기 가이드
-	--[[ if kick_ready_t>0 and f%2==0 then
-		local c=balls[1]
-		if(c) draw_dot_line(c.x,c.y,kick_a,2,10+kick_pow*13)
-	end ]]
 	if gg.is_playing and gg.player_ball and gg.player_ball.wait_action and f%2==0 then
 		local x,y=flr(gg.player_ball.x+0.5),flr(gg.player_ball.y+0.5)
 		local r=6
@@ -864,13 +864,16 @@ function _draw()
 		draw_dot_line(x,y,kick_a,2,10+kick_pow*13)
 	end
 
-	-- 비네팅(cpu 0.09 먹음)
+	-- 비네팅(cpu 0.09 먹음 / 동적으로 바꾸면 0.11 먹음)
 	if gg.dim_pow>0 then
+		local offset=abs(t()*5%6-3)
+		local ratio=((16-gg.dim_pow)/16)^3
 		for i=0,15 do
 			for j=0,15 do
 				local d=vntt[i*16+j+1]
 				if d>0 then
-					fillp_step(d+(gg.dim_pow-16))
+					-- fillp_step(flr(d-ratio*16))
+					fillp_step(flr(d+(gg.dim_pow-16)+offset))
 					local x,y=j*8,i*8
 					rectfill(x,y,x+7,y+7,1)
 				end
@@ -885,14 +888,24 @@ function _draw()
 	-- 타이틀 화면이라면?
 	if gg.is_title then
 
-		draw_title()
+		local ratio=((16-gg.dim_pow)/16)^3 -- 1->0
+		draw_title(ratio*20)
 
 		-- 글자
 		if true then
-			local x,y=32,75
-			x-=cos(t()*0.6)*2
-			y-=sin(t()*0.6)*2
-			print2("press ❎ to play",x,y,7,0,0)
+			local d1,d2,d3=cos(t()*0.6)*2,sin(t()*0.6)*2,cos(t()*0.7)*2
+			local x,y=32-d1,75-d2-ratio*10
+			printos("press ❎ to play",x,y,7,0,0)
+			print("❎",x+24,y,10)
+		end
+
+		-- ROOM CLEAR
+		if false then
+			local d1,d2,d3=cos(t()*0.6)*2,sin(t()*0.6)*2,cos(t()*0.7)*2
+			local x,y=30-d1,48-d2+ratio*10
+			printos("\^w\^tr\-fo\-fo\-fm \-bc\-fl\-fe\-fa\-fr\-f!",x+d3,y,10,0,0)
+			x,y=24-d2,68+d1-ratio*10
+			printos("press ❎ to next room",x,y,7,0,0)
 			print("❎",x+24,y,10)
 		end
 

@@ -1,9 +1,16 @@
 
-ver=0.21 -- 2022-03-10
+ver=0.3 -- 2022-03-11
 --[[ 
+v0.3
+- 간단한 게임 순환구조 완성(클리어, 게임오버)
+- 로고 살짝 더 꾸미기
+- 룸 1~5까지 진행 가능(5 다음에는 다시 1)
+- 조작감 개선
+
 v0.21
 - 비네팅 전환 과정 더 부드럽게 + 동적인 느낌 추가
 - 타이틀 화면 전환 연출 살짝
+- ROOM CLEAR 화면 간단히 만드는 중
 
 v0.20
 - 비네팅 연출 보강(전환 과정 부드럽게)
@@ -306,7 +313,7 @@ function draw_dot_line(x,y,angle,min,max)
 	local dx=cos(angle)
 	local dy=sin(angle)
 	local dot1,dot2=0,4
-	local len0=t()%0.25*4*(dot1+dot2)
+	local len0=t()%0.2*5*(dot1+dot2)
 	local max2=max-len0
 	local x1,y1
 	for i=0,(max2-min)/(dot1+dot2) do
@@ -320,23 +327,6 @@ function draw_dot_line(x,y,angle,min,max)
 	x1,y1=x+dx*(max+2),y+dy*(max+2)
 	circfill(x1+1.5,y1+1.5,2,0)
 	circfill(x1,y1,2,10)
-end
-
--- 정사각형 큐브 그리기
-function draw_cube_7x7(x,y)
-	-- local c1,c2,c3=3,6,11 -- 초록
-	local c1,c2,c3=4,2,7 -- 회색
-	-- local c1,c2,c3=5,13,12 -- 보라
-	-- c1,c2,c3=8,14,15 -- 주황
-
-	local x2,y2=x+6,y+6
-	rectfill(x,y,x2,y2,c2)
-	for i=0,2 do
-		line(x+i,y+i,x2-i,y+i,c3)
-		line(x+i,y2-i,x2-i,y2-i,c1)
-	end
-	line(x2+1,y,x2+1,y2+1,0)
-	line(x,y2+1,x2+1,y2+1,0)
 end
 
 -- 화면 복붙(이동자국 표현용)
@@ -447,19 +437,23 @@ end
 -- 박스 데이타 4개 좌표 뽑기
 function get_box_coords(b)
 	return b[1],b[2],b[3],b[4]
-	--[[ local x1,y1=b[1]*8,b[2]*8
-	local x2,y2=x1+b[3]*8,y1+b[4]*8
-	return x1,y1,x2,y2 ]]
 end
 
 -- 로고 그리기
-function draw_title(dy)
+function draw_title_test(dy)
 
-	-- local x,y=37,40+dy
-	-- local s="\^w\^tdungeon\n \|h&pool"
 	local dx,dy=cos(t()*0.5)*4,sin(t()*0.5)*3+dy
 	local x,y=40+dx,40+dy
-	local s="\^w\^td\-fu\-fn\-fg\-fe\-fo\-fn\n \|h&\-fp\-fo\-fo\-fl" -- 자간 좁힘
+	-- local s="\^w\^td\-fu\-fn\-fg\-fe\-fo\-fn\n \|h&\-fp\-fo\-fo\-fl" -- 자간 좁힘
+	-- local s="\^w\^td\-f\|fu\-f\|fn\-f\|fg\-f\|fe\-f\|fo\-f\|fn\n\n    \|h\|c&\-f\|fp\-f\|fo\-f\|fo\-f\|fl" -- 자간 좁힘
+	local s0="\^w\^t,d\-f,u\-f,n\-f,g\-f,e\-f,o\-f,n\n \|h&\-f,p\-f,o\-f,o\-f,l"
+	s0=split(s0)
+	local s=s0[1]
+	local diff={"e","f","g","h","i"}
+	for i=2,#s0 do
+		s..="\|"..(diff[flr((f/8+i)%5+1)])..s0[i]
+	end
+
 
 	-- 그림자
 	do
@@ -487,17 +481,56 @@ function draw_title(dy)
 		print("\^w\^t&",x+8,y+13,4)
 
 		-- highlight
-		-- local p_s="0,-1,8,-1,12,-1,16,-1,24,1,26,-1,32,-1,40,1,42,-1,48,-1,16,12,24,14,26,12,32,14,34,12,40,12"
-		local p_s="0,-1,7,-1,11,-1,14,-1,21,1,23,-1,28,-1,35,1,37,-1,42,-1,15,12,22,14,24,12,29,14,31,12,36,12" -- 자간 좁힘
+		--[[ local p_s="0,-1,7,-1,11,-1,14,-1,21,1,23,-1,28,-1,35,1,37,-1,42,-1,15,12,22,14,24,12,29,14,31,12,36,12" -- 자간 좁힘
 		local p=split(p_s)
 		for i=1,#p,2 do
 			pset(x+p[i],y+p[i+1],15)
 		end
 		pset(x+8,y+12,7)
-		pset(x+8,y+18,7)
+		pset(x+8,y+18,7) ]]
 	end
 end
+function draw_title(dy)
 
+	local dx,dy=cos(t()*0.5)*4,sin(t()*0.5)*3+dy
+	local x,y=40+dx,40+dy
+	local s="\^w\^td\-f\|fu\-f\|hn\-f\|fg\-f\|he\-f\|fo\-f\|hn\n \|h\|f&\-f\|hp\-f\|fo\-f\|ho\-f\|fl" -- 자간 좁힘
+
+	-- 그림자
+	do
+		local d=5
+		print(s,x+d-1,y+d,0)
+		print(s,x+d,y+d,0)
+	end
+
+	-- 글자
+	do
+		-- 외곽선
+		print(s,x+1,y,0)
+		print(s,x-1,y-2,0)
+		print(s,x+1,y-2,0)
+		print(s,x-1,y+2,0)
+		print(s,x+1,y+2,0)
+
+		-- 글자 본체
+		print(s,x,y+1,3)
+		print(s,x,y-1,14)
+		print(s,x,y,8)
+		
+		-- &
+		print("\^w\^t&",x+8,y+11,2)
+		print("\^w\^t&",x+8,y+12,4)
+
+		-- highlight
+		local p_s="0,-1,7,-2,11,-2,14,-1,21,0,23,-2,28,-1,35,0,37,-2,42,-1,15,12,22,13,24,11,29,14,31,12,36,11"
+		local p=split(p_s)
+		for i=1,#p,2 do
+			pset(x+p[i],y+p[i+1],15)
+		end
+		pset(x+8,y+11,7)
+		pset(x+8,y+17,7)
+	end
+end
 -- 글자 + 외곽선 + 그림자
 function printos(s,x,y,c,c_out,c_shadow)
 	print(s,x+3,y+3,c_shadow)
@@ -517,6 +550,39 @@ end
 fill_steps={0xffff.8,0xfffd.8,0xf7fd.8,0xf7f5.8,0xf5f5.8,0xf5e5.8,0xb5e5.8,0xb5a5.8,0xa5a5.8,0xa5a4.8,0xa1a4.8,0xa1a0.8,0xa0a0.8,0xa020.8,0x8020.8,0x8000.8,0x0000.8}
 function fillp_step(s) fillp(fill_steps[min(17,max(1,s+1))]) end
 
+-- 게임 상태 변경(title,play,gamever,clear)
+-- todo: 간소화하자
+function set_gamestate(to)
+	if to=="title" then
+		gg.is_title=true
+		gg.is_playing=false
+		gg.is_gameover=false
+		gg.is_clear=false
+		gg.use_dim=true
+		gg.dim_pow=max(1,gg.dim_pow)
+	elseif to=="gameover" then
+		gg.is_title=false
+		gg.is_playing=false
+		gg.is_gameover=true
+		gg.is_clear=false
+		gg.use_dim=true
+		gg.dim_pow=max(1,gg.dim_pow)
+	elseif to=="clear" then
+		gg.is_title=false
+		gg.is_playing=false
+		gg.is_gameover=false
+		gg.is_clear=true
+		gg.use_dim=true
+		gg.dim_pow=max(1,gg.dim_pow)
+	elseif to=="play" then
+		gg.is_title=false
+		gg.is_playing=true
+		gg.is_gameover=false
+		gg.is_clear=false
+		gg.use_dim=false
+	end
+end
+
 -- 기타 (끝)
 -------------------------------------------------------------------------------
 
@@ -531,22 +597,33 @@ vntt=split("16,16,15,13,11,10,9,9,9,9,10,11,13,15,16,16,16,15,12,10,8,7,6,5,5,6,
 
 function gg_reset()
 	gg={
+		-- 게임 상태
 		is_title=true,
 		is_playing=false,
+		is_gameover=false,
+		is_clear=false,
+
+		-- 진행 룸
+		room_no=1,
+		room_no_max=5,
+		
+		-- 플레이어 공
+		player_ball=nil,
+
+		-- 딤처리
 		use_dim=true,
 		dim_pow=16, -- 1~16
-		player_ball=nil,
 	}
 end
 gg_reset()
 
-function _init()
-	-- 팔레트는 보너스 색상과 섞어서 사용
-	-- https://www.lexaloffle.com/bbs/?pid=68190#p
-	pal({[0]=128,130,6,131,13,133,3,7,136,5,138,139,14,141,142,15},1)
-
-	cls(c_bg)
-	copyprevframe()
+-- 룸 셋팅
+-- todo: 세팅 간소화
+function set_room(n)
+	holes={}
+	balls={}
+	abysses={}
+	boxes={}
 
 	-- 구슬 색상 세트
 	local colors={}
@@ -554,42 +631,153 @@ function _init()
 	colors[2]={8,14,15,8} -- 주황색
 	colors[3]={5,13,12,4} -- 포도색
 
-	-- 홀 추가
-	holes={}
-	add(holes,{x=104,y=64,r=5})
+	if n==1 then
+		-- 홀 추가
+		add(holes,{x=110,y=64,r=5})
 
-	-- 구슬 여럿 추가
-	balls={}
-	gg.player_ball={x=12,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true,wait_action=true}
-	add(balls,gg.player_ball) -- 초록 구슬
-	add(balls,{x=54,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(balls,{x=64,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(balls,{x=64,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(balls,{x=74,y=64-12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(balls,{x=74,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2]}) -- 주황 구슬
-	add(balls,{x=74,y=64+12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(balls,{x=84,y=64-18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(balls,{x=84,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(balls,{x=84,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-	add(balls,{x=84,y=64+18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		-- 구슬 여럿 추가
+		-- gg.player_ball={x=20,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true,wait_action=true}
+		gg.player_ball={x=20,y=52,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true,wait_action=true}
+		add(balls,gg.player_ball) -- 초록 구슬
+		add(balls,{x=64,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2],is_boss=true}) -- 주황 구슬
+		add(balls,{x=74,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=74,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 
-	-- 심연 추가
-	abysses={}
-	add(abysses,{14,0,2,4})
-	add(abysses,{1,12,4,3})
-	add(abysses,{10,12,7,4})
-	
-	-- 박스(벽) 추가
-	boxes={}
-	add(boxes,{0,0,7,1})
-	add(boxes,{13,0,1,5})
-	add(boxes,{14,4,3,1})
-	add(boxes,{0,11,4,1})
-	add(boxes,{4,5,2,2})
-	add(boxes,{4,7,1,5})
-	add(boxes,{10,11,3,1})
-	add(boxes,{0,12,1,3})
-	add(boxes,{0,15,10,1})
+		-- 심연 추가
+		add(abysses,{0,0,5,4})
+		add(abysses,{12,0,5,4})
+		add(abysses,{-2,10,4,6})
+		add(abysses,{9,12,8,4})
+
+		-- 박스(벽) 추가
+		add(boxes,{5,0,1,4})
+		add(boxes,{11,0,1,4})
+		add(boxes,{0,4,6,1})
+		add(boxes,{7,4,1,1})
+		add(boxes,{9,4,1,1})
+		add(boxes,{11,4,6,1})
+		add(boxes,{0,9,3,1})
+		add(boxes,{4,11,1,1})
+		add(boxes,{6,11,1,1})
+		add(boxes,{2,10,1,7})
+		add(boxes,{8,11,9,1})
+		add(boxes,{8,12,1,5})
+
+	elseif n==2 then
+		-- 홀 추가
+		add(holes,{x=114,y=48,r=5})
+
+		-- 구슬 여럿 추가
+		gg.player_ball={x=24,y=100,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true,wait_action=true}
+		add(balls,gg.player_ball) -- 초록 구슬
+		add(balls,{x=74+12,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2],is_boss=true}) -- 주황 구슬
+		add(balls,{x=74-0,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=74-12,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=74-24,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+
+		-- 심연 추가
+		add(abysses,{1,-2,6,7})
+		add(abysses,{8,0,8,3})
+		add(abysses,{7,12,9,4})
+
+		-- 박스(벽) 추가
+		add(boxes,{0,0,1,6})
+		add(boxes,{1,5,6,1})
+		add(boxes,{7,0,1,6})
+		add(boxes,{8,3,9,1})
+		add(boxes,{8,4,2,2})
+		add(boxes,{0,15,6,2})
+		add(boxes,{6,11,1,6})
+		add(boxes,{7,11,11,1})
+
+	elseif n==3 then
+		-- 홀 추가
+		add(holes,{x=76,y=36,r=5})
+
+		-- 구슬 여럿 추가
+		gg.player_ball={x=80,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true,wait_action=true}
+		add(balls,gg.player_ball) -- 초록 구슬
+		add(balls,{x=52,y=76,r=5,sx=0,sy=0,hit_c=0,c=colors[2],is_boss=true}) -- 주황 구슬
+		add(balls,{x=52,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=40,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=40,y=76,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+
+		-- 심연 추가
+		add(abysses,{0,0,7,6})
+		add(abysses,{-2,9,5,7})
+		add(abysses,{11,12,6,5})
+
+		-- 박스(벽) 추가
+		add(boxes,{0,6,7,1})
+		add(boxes,{7,0,1,7})
+		add(boxes,{8,6,4,1})
+		add(boxes,{10,11,7,1})
+		add(boxes,{10,12,1,5})
+		add(boxes,{0,7,3,2})
+		add(boxes,{3,7,1,10})
+
+	elseif n==4 then
+		-- 홀 추가
+		add(holes,{x=110,y=64,r=5})
+
+		-- 구슬 여럿 추가
+		gg.player_ball={x=12,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true,wait_action=true}
+		add(balls,gg.player_ball) -- 초록 구슬
+		add(balls,{x=54,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=64,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=64,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=74,y=64-12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=74,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2],is_boss=true}) -- 주황 구슬
+		add(balls,{x=74,y=64+12,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=84,y=64-18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=84,y=64-6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=84,y=64+6,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=84,y=64+18,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+
+		-- 심연 추가
+		add(abysses,{14,0,2,4})
+		add(abysses,{-2,12,7,4})
+		add(abysses,{11,12,6,4})
+		
+		-- 박스(벽) 추가
+		add(boxes,{0,0,5,2})
+		add(boxes,{13,0,1,5})
+		add(boxes,{14,4,3,1})
+		add(boxes,{0,11,5,1})
+		add(boxes,{4,5,1,1})
+		add(boxes,{4,7,1,1})
+		add(boxes,{4,9,1,1})
+		add(boxes,{11,11,6,1})
+		add(boxes,{5,15,6,2})
+
+	elseif n==5 then
+		-- 홀 추가
+		add(holes,{x=114,y=54,r=5})
+
+		-- 구슬 여럿 추가
+		gg.player_ball={x=16,y=80,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true,wait_action=true}
+		add(balls,gg.player_ball) -- 초록 구슬
+		add(balls,{x=16,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2],is_boss=true}) -- 주황 구슬
+		add(balls,{x=16,y=96,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=16,y=112,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=32,y=112,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=48,y=112,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+
+		-- 심연 추가
+		add(abysses,{5,5,6,6})
+		add(abysses,{12,0,8,4})
+
+		-- 박스(벽) 추가
+		add(boxes,{0,4,1,1})
+		add(boxes,{2,4,1,1})
+		add(boxes,{11,0,1,4})
+		add(boxes,{4,4,13,1})
+		add(boxes,{4,5,1,7})
+		add(boxes,{6,11,1,1})
+		add(boxes,{9,11,1,1})
+		add(boxes,{11,5,1,7})
+
+	end
 
 	-- 심연, 박스는 16x16 타일로 배치하는 걸로 가정하고 좌표를 적었음
 	-- 그 좌표를 실제 좌표로 미리 바꿔둔다(실시간으로 하니까 꽤 무거워서)
@@ -607,13 +795,24 @@ function _init()
 	end
 end
 
+function _init()
+	-- 팔레트는 보너스 색상과 섞어서 사용
+	-- https://www.lexaloffle.com/bbs/?pid=68190#p
+	pal({[0]=128,130,6,131,13,133,3,7,136,5,138,139,14,141,142,15},1)
+
+	cls(c_bg)
+	copyprevframe()
+	set_room(gg.room_no)
+end
+
+-- todo: 정리해야하는디...
 kick=false
-kick_ready_t=0
 kick_a=0
 kick_a_acc=0
 kick_pow_min=0.4
 kick_pow_max=3.2
 kick_pow=kick_pow_max
+kick_pow_to=kick_pow_max
 
 function _update60()
 	f+=1
@@ -670,13 +869,21 @@ function _update60()
 		for c in all(balls) do
 			if c.is_ssok then
 				c.type,c.eff_timer="ball_ssok",30
-				if(c.is_player) gg.player_ball=nil -- todo: 게임오버 상태 만들어야 한다
+
+				if c.is_boss then set_gamestate("clear") -- 보스 공이 들어가면 클리어
+				elseif c.is_player then gg.player_ball=nil set_gamestate("gameover") end -- 플레이어 공이 들어가면 게임오버
+
 				add(eff,{type="ssok",eff_timer=30,x=holes[1].x,y=holes[1].y,c=c.c[3]}) -- todo: 1번 홀만 처리하는 중
 				add(eff,c) del(balls,c)
 				sfx(3)
+
 			elseif c.is_dive then
 				c.type,c.eff_timer="ball_dive",30
+
+				-- 보스나 플레이어 공이 떨어지면 게임오버
+				if(c.is_boss or c.is_player) set_gamestate("gameover") 
 				if(c.is_player) gg.player_ball=nil
+
 				add(eff,c) del(balls,c)
 				sfx(4)
 			end
@@ -689,7 +896,6 @@ function _update60()
 		if btn(4) then
 			if not kick and #balls>0 then
 				kick=true
-				kick_ready_t=0
 				balls[1].sx=cos(kick_a)*kick_pow
 				balls[1].sy=sin(kick_a)*kick_pow
 				gg.player_ball.wait_action=false
@@ -697,36 +903,46 @@ function _update60()
 			end
 		else kick=false end
 
-		-- 화살표 키
-		if btn(0) or btn(1) or btn(2) or btn(3) then
-			kick_ready_t=60
-			-- 좌우 키로 각도
-			if btn(0) then kick_a_acc=min(0.4,kick_a_acc+0.0015)
-			elseif btn(1) then kick_a_acc=max(-0.4,kick_a_acc-0.0015) end
-			-- 상하 키로 파워
-			if btn(2) then kick_pow+=(kick_pow_max-kick_pow)*0.04
-			elseif btn(3) then kick_pow+=(kick_pow_min-kick_pow)*0.04 end
-		else
-			kick_ready_t=max(0,kick_ready_t-1)
-		end
+		-- 좌우 키로 각도(각가속도 사용)
+		if btn(0) then kick_a_acc=min(0.012,kick_a_acc+0.0004)
+		elseif btn(1) then kick_a_acc=max(-0.012,kick_a_acc-0.0004)
+		else kick_a_acc=abs(kick_a_acc)<0.0006 and 0 or kick_a_acc*0.7 end
 		kick_a+=kick_a_acc
-		kick_a_acc=abs(kick_a_acc)<0.0006 and 0 or kick_a_acc*0.80
+
+		-- 상하 키로 파워
+		if btn(2) then kick_pow_to=min(kick_pow_to+0.15,kick_pow_max)
+		elseif btn(3) then kick_pow_to=max(kick_pow_to-0.15,kick_pow_min) end
+		kick_pow+=(kick_pow_to-kick_pow)*0.2
 	end
 
 	-- 타이틀 화면이라면? x키 눌러서 게임 시작
-	-- 게임 중이라면 x키 눌러서 타이틀로...(일시정지는 아님)
+	-- 게임 중이라면 x키 눌러서 타이틀로...
 	if gg.is_title then
-		if btnp(5) then
-			gg.is_title=false
-			gg.is_playing=true
-			gg.use_dim=false
+		if gg.dim_pow>=16 and btnp(5) then
+			set_gamestate("play")
 			sfx(8)
 		end
-	elseif gg.dim_pow<=0 then
+		
+	elseif gg.is_gameover then
+		if gg.dim_pow>=16 and btnp(5) then
+			-- 죽으면 그 방을 처음부터 다시
+			set_room(gg.room_no)
+			set_gamestate("play")
+			sfx(8)
+		end
+
+	elseif gg.is_clear then
+		if gg.dim_pow>=16 and btnp(5) then
+			-- 클리어했으면 계속 다음 룸으로...(막판이면 1로 돌아감)
+			gg.room_no=(gg.room_no<gg.room_no_max) and gg.room_no+1 or 1
+			set_room(gg.room_no)
+			set_gamestate("play")
+			sfx(8)
+		end
+
+	elseif gg.dim_pow<=0 then -- 게임 중에는 x키 눌러서 타이틀로(임시 처리)
 		if btnp(5) then
-			gg.is_title=true
-			gg.is_playing=false
-			gg.use_dim=true
+			set_gamestate("title")
 			gg.dim_pow=max(1,gg.dim_pow)
 			sfx(7)
 		end
@@ -738,7 +954,7 @@ function _draw()
 
 	-- cls(c_bg)
 
-	-- 타이틀 화면에서는 딤 처리
+	-- 딤 처리(화면 단색화)
 	if gg.dim_pow>0 then
 		if gg.use_dim then gg.dim_pow=min(gg.dim_pow+1,16)
 		else gg.dim_pow=max(gg.dim_pow-1,0) end
@@ -861,7 +1077,7 @@ function _draw()
 		local x,y=flr(gg.player_ball.x+0.5),flr(gg.player_ball.y+0.5)
 		local r=6
 		circ(x,y,r,10)
-		draw_dot_line(x,y,kick_a,2,10+kick_pow*13)
+		draw_dot_line(x,y,kick_a,2,12+kick_pow*12)
 	end
 
 	-- 비네팅(cpu 0.09 먹음 / 동적으로 바꾸면 0.11 먹음)
@@ -872,8 +1088,8 @@ function _draw()
 			for j=0,15 do
 				local d=vntt[i*16+j+1]
 				if d>0 then
-					-- fillp_step(flr(d-ratio*16))
-					fillp_step(flr(d+(gg.dim_pow-16)+offset))
+					-- fillp_step(flr(d-ratio*16)) -- 정적인 딤
+					fillp_step(flr(d+(gg.dim_pow-16)+offset)) -- 동적인 딤
 					local x,y=j*8,i*8
 					rectfill(x,y,x+7,y+7,1)
 				end
@@ -885,9 +1101,37 @@ function _draw()
 	-- (딤 처리를 했었다면) 팔레트 복원
 	pal({1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,0},0)
 
-	-- 타이틀 화면이라면?
-	if gg.is_title then
+	-- 게임오버/클리어/타이틀 화면이라면?
+	if gg.is_gameover or gg.is_clear then
 
+		local ratio=((16-gg.dim_pow)/16)^3 -- 1->0
+
+		if gg.is_gameover then
+			local d1,d2=cos(t()*0.6)*2,sin(t()*0.6)*2
+
+			local s="\^i g a m e  o v e r "
+ 			s=sub(s,1,(1-ratio)*#s)
+			local x,y=63-#s*2+5-d1,52-d2+ratio*10
+			printos(s,x,y,8,0,0)
+
+			x,y=26-d2,68+d1-ratio*10
+			printos("press ❎ to restart",x,y,7,0,0)
+			print("❎",x+24,y,10)
+
+		else
+			local d1,d2=cos(t()*0.6)*2,sin(t()*0.6)*2
+			local s="\^i room #"..gg.room_no.." clear! "
+			s=sub(s,1,(1-ratio)*#s)
+			local x,y=63-#s*2+5-d1,52-d2+ratio*10
+			printos(s,x,y,10,0,0)
+
+			x,y=23-d2,68+d1-ratio*10
+			printos("press ❎ to next room",x,y,7,0,0)
+			print("❎",x+24,y,10)
+		end
+
+	elseif gg.is_title then
+		
 		local ratio=((16-gg.dim_pow)/16)^3 -- 1->0
 		draw_title(ratio*20)
 
@@ -898,24 +1142,14 @@ function _draw()
 			printos("press ❎ to play",x,y,7,0,0)
 			print("❎",x+24,y,10)
 		end
-
-		-- ROOM CLEAR
-		if false then
-			local d1,d2,d3=cos(t()*0.6)*2,sin(t()*0.6)*2,cos(t()*0.7)*2
-			local x,y=30-d1,48-d2+ratio*10
-			printos("\^w\^tr\-fo\-fo\-fm \-bc\-fl\-fe\-fa\-fr\-f!",x+d3,y,10,0,0)
-			x,y=24-d2,68+d1-ratio*10
-			printos("press ❎ to next room",x,y,7,0,0)
-			print("❎",x+24,y,10)
-		end
-
+		
 		-- 기타
 		local v="v"..ver
 		print(v,127-#v*4,121,9)
 	end
 
 	-- 디버그용
-	-- print_log() -- debug: log
+	print_log() -- debug: log
 	-- draw_color_table()
 	-- if(hit_count>0) stop() -- debug: 일단 멈춰보자...
 end

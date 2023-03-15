@@ -1,6 +1,9 @@
 
-ver=0.3 -- 2022-03-11
---[[ 
+ver=0.31 -- 2022-03-15
+--[[
+v0.31 
+- 하트, 남은 킥 수 추가하고 UI 표시
+
 v0.3
 - 간단한 게임 순환구조 완성(클리어, 게임오버)
 - 로고 살짝 더 꾸미기
@@ -610,6 +613,12 @@ function gg_reset()
 		-- 플레이어 공
 		player_ball=nil,
 
+		-- 플레이 상태
+		remain_heart=5,
+		remain_heart_max=5,
+		remain_kick=12,
+		remain_kick_max=12,
+
 		-- 딤처리
 		use_dim=true,
 		dim_pow=16, -- 1~16
@@ -757,10 +766,9 @@ function set_room(n)
 		-- 구슬 여럿 추가
 		gg.player_ball={x=16,y=80,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true,wait_action=true}
 		add(balls,gg.player_ball) -- 초록 구슬
-		add(balls,{x=16,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2],is_boss=true}) -- 주황 구슬
 		add(balls,{x=16,y=96,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 		add(balls,{x=16,y=112,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-		add(balls,{x=32,y=112,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=32,y=112,r=5,sx=0,sy=0,hit_c=0,c=colors[2],is_boss=true}) -- 주황 구슬
 		add(balls,{x=48,y=112,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 
 		-- 심연 추가
@@ -809,7 +817,7 @@ end
 kick=false
 kick_a=0
 kick_a_acc=0
-kick_pow_min=0.4
+kick_pow_min=0.6
 kick_pow_max=3.2
 kick_pow=kick_pow_max
 kick_pow_to=kick_pow_max
@@ -863,19 +871,24 @@ function _update60()
 		end
 
 		-- 모든 공이 충분히 느려지면 액션 대기 상태로...
-		if(slowest_spd<0.1 and gg.player_ball) gg.player_ball.wait_action=true
+		-- 단, 남은 킥 수가 없으면 게임오버
+		if slowest_spd<=0 and gg.player_ball then
+			if gg.remain_kick<=0 then set_gamestate("gameover") sfx(4)
+			else gg.player_ball.wait_action=true end
+		end
 
 		-- 홀/심연에 들어간 공은 지운다 + 소리/이펙트 추가
 		for c in all(balls) do
 			if c.is_ssok then
 				c.type,c.eff_timer="ball_ssok",30
 
-				if c.is_boss then set_gamestate("clear") -- 보스 공이 들어가면 클리어
-				elseif c.is_player then gg.player_ball=nil set_gamestate("gameover") end -- 플레이어 공이 들어가면 게임오버
+				-- todo: 보스 공이 들어갔을 때 소리를 더 요란하게~
+				if c.is_boss then set_gamestate("clear") sfx(3) -- 보스 공이 들어가면 클리어
+				elseif c.is_player then gg.player_ball=nil set_gamestate("gameover") sfx(4) -- 플레이어 공이 들어가면 게임오버
+				else sfx(3) end
 
 				add(eff,{type="ssok",eff_timer=30,x=holes[1].x,y=holes[1].y,c=c.c[3]}) -- todo: 1번 홀만 처리하는 중
 				add(eff,c) del(balls,c)
-				sfx(3)
 
 			elseif c.is_dive then
 				c.type,c.eff_timer="ball_dive",30
@@ -899,6 +912,7 @@ function _update60()
 				balls[1].sx=cos(kick_a)*kick_pow
 				balls[1].sy=sin(kick_a)*kick_pow
 				gg.player_ball.wait_action=false
+				gg.remain_kick-=1
 				sfx(2)
 			end
 		else kick=false end
@@ -925,16 +939,29 @@ function _update60()
 		
 	elseif gg.is_gameover then
 		if gg.dim_pow>=16 and btnp(5) then
-			-- 죽으면 그 방을 처음부터 다시
-			set_room(gg.room_no)
-			set_gamestate("play")
-			sfx(8)
+			-- 죽으면? 하트 남은 게 있으면 다시, 없으면 타이틀로...
+			if gg.remain_heart>1 then
+				gg.remain_heart-=1
+				gg.remain_kick=gg.remain_kick_max
+				set_room(gg.room_no)
+				set_gamestate("play")
+				sfx(8)
+			else
+				gg.remain_heart=gg.remain_heart_max
+				gg.remain_kick=gg.remain_kick_max
+				gg.room_no=1
+				set_room(1)
+				set_gamestate("title")
+				gg.dim_pow=max(1,gg.dim_pow)
+				sfx(7)
+			end
 		end
 
 	elseif gg.is_clear then
 		if gg.dim_pow>=16 and btnp(5) then
 			-- 클리어했으면 계속 다음 룸으로...(막판이면 1로 돌아감)
 			gg.room_no=(gg.room_no<gg.room_no_max) and gg.room_no+1 or 1
+			gg.remain_kick=gg.remain_kick_max
 			set_room(gg.room_no)
 			set_gamestate("play")
 			sfx(8)
@@ -1098,6 +1125,26 @@ function _draw()
 		fillp()
 	end
 
+	-- ui 그리기
+	if true then
+		palt(0,false) palt(2,true)
+		for i=1,gg.remain_heart_max do
+			local ix=2+(i-1)*8
+			sspr(0,32,10,10,ix,2)
+			if(i>gg.remain_heart) spr(67,ix,2)
+		end
+
+		local x,y=45,1
+		local w=#tostr(gg.remain_kick)*4
+		sspr(10,32,3,12,x,y)
+		sspr(13,32,1,12,x+3,y,w,12)
+		sspr(14,32,5,12,x+3+w,y)
+		print(gg.remain_kick,x+3,y+3,0)
+		
+		palt()
+	end
+
+
 	-- (딤 처리를 했었다면) 팔레트 복원
 	pal({1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,0},0)
 
@@ -1109,13 +1156,17 @@ function _draw()
 		if gg.is_gameover then
 			local d1,d2=cos(t()*0.6)*2,sin(t()*0.6)*2
 
-			local s="\^i g a m e  o v e r "
+			-- 남은 하트가 없으면 진짜 게임오버, 있으면 룸 재시작 가능
+
+			local s=gg.remain_heart>1 and "\^i f a i l e d " or "\^i g a m e  o v e r "
  			s=sub(s,1,(1-ratio)*#s)
 			local x,y=63-#s*2+5-d1,52-d2+ratio*10
 			printos(s,x,y,8,0,0)
 
-			x,y=26-d2,68+d1-ratio*10
-			printos("press ❎ to restart",x,y,7,0,0)
+			s=gg.remain_heart>1 and "press ❎ to restart" or "press ❎ to title"
+			-- x,y=26-d2,68+d1-ratio*10
+			x,y=63-#s*2-d2,68+d1-ratio*10
+			printos(s,x,y,7,0,0)
 			print("❎",x+24,y,10)
 
 		else
@@ -1146,6 +1197,7 @@ function _draw()
 		-- 기타
 		local v="v"..ver
 		print(v,127-#v*4,121,9)
+	
 	end
 
 	-- 디버그용

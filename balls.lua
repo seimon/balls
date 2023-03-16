@@ -1,48 +1,17 @@
 
-ver=0.31 -- 2022-03-15
+ver=0.5 -- 2022-03-16
 --[[
-v0.31 
-- 하트, 남은 킥 수 추가하고 UI 표시
+todo:
+- 룸 셋팅 간소화(문자열로 간단하게 셋팅하게)
+- 점수, 보너스
+- 보스, 홀 2개 이상
+- 죽으면 화면 흔들기
 
-v0.3
-- 간단한 게임 순환구조 완성(클리어, 게임오버)
-- 로고 살짝 더 꾸미기
-- 룸 1~5까지 진행 가능(5 다음에는 다시 1)
-- 조작감 개선
-
-v0.21
-- 비네팅 전환 과정 더 부드럽게 + 동적인 느낌 추가
-- 타이틀 화면 전환 연출 살짝
-- ROOM CLEAR 화면 간단히 만드는 중
-
-v0.20
-- 비네팅 연출 보강(전환 과정 부드럽게)
-- 타이틀 화면 등장퇴장 사운드 추가
-- 조작 대기 상황 조건 수정(모든 공이 충분히 느려졌을 때)
-- 타이틀 화면이 나올 때는 게임의 움직임과 물리 처리를 멈춤
-- 플레이어 공이 사라졌을 때는 액션 대기하지 않음(게임 진행 불가 상태)
-- todo: 게임오버 상태 만들어야 함
-
-v0.19
-- 비네팅 효과 추가(fillp_step() 최적화 필요)
-
-v0.18
-- 타일 좌표 설정 최적화(매번 좌표 *8 처리하던 걸 제거)
-- 바닥 타일 최적화(듬성듬성 찍음)
-- 타이틀 그리는 것도 조금 간소화
-- 홀에 들어갔을 때 이펙트
-- 조작 문제 고침(조작 관련 코드를 _update60()으로 이동)
-
-v0.17
-- 박스 충돌체크를 상하좌우 먼저, 모서리를 마지막에 몰아서 처리
-- 기본 소리 적용
-- 조작이 비정상 상태가 돼버림...
-
-v0.14
-- 타이틀 화면 간단히 꾸밈
-- X키 눌러서 타이틀<->게임 전환하는 임시 구현
-- 딤 처리 전환 연출 추가
-- 구슬이 0개일 때의 처리 추가
+v0.5
+- 담장 뿌리 부분이 공을 살짝 가리던 문제 고침
+- 화면전환 연출 더 부드럽게(dim_pow30사용해서 조금 더 길게)
+- 게임오버 후 타이틀로 넘어갈 때 암전 효과 추가
+- 룸 넘버 첨에 보여주기
 ]]
 
 sw,sh=128,128
@@ -379,9 +348,9 @@ function draw_ball(c,deep)
 end
 
 -- 이펙트 그리기
--- todo: 레이어 구분 필요(지금은 공 이펙트가 벽에 가려지지 않음)
-function draw_eff()
-	for e in all(eff) do
+-- todo: 레이어 구분을 해야하는데... 당장 중요하진 않음
+function draw_eff(list)
+	for e in all(list) do
 		if e.type=="ball_ssok" or e.type=="ball_dive" then
 			local r=e.eff_timer/30
 			if r<0.15 then fillp(0b1110111110111111.1)
@@ -400,20 +369,29 @@ function draw_eff()
 				e.x+=e.sx+(e.tx-e.x)*0.2
 				e.y+=e.sy+(e.ty-e.y)*0.2
 			end
+
 		elseif e.type=="ssok" then
 			local r=(e.eff_timer/30)^2
 			if(f%2==0) circ(e.x+2,e.y+2,5+(1-r)*12,c_sd)
 			circ(e.x,e.y,5+(1-r)*12,e.c)
+
 		elseif e.type=="hit" then
 			pset(e.x,e.y,e.c)
 			e.x+=e.sx
 			e.y+=e.sy
 			e.sx*=0.94
 			e.sy*=0.94
+		elseif e.type=="info" then
+			local ratio=(abs(90-e.eff_timer)/90)^2 -- 1->0->1
+			local s="  dungeon room "..gg.room_no.."  "
+			s="\^i"..sub(s,#s*ratio,#s)
+			local dx,dy=cos(t()*0.8)*5,sin(t()*0.8)*5
+			local x,y=63-#s*2+5+dx,34-dy+ratio*20
+			printos(s,x,y,14,0,0)
 		end
 
 		e.eff_timer-=1
-		if(e.eff_timer<=0) del(eff,e)
+		if(e.eff_timer<=0) del(list,e)
 	end
 end
 
@@ -447,8 +425,6 @@ function draw_title_test(dy)
 
 	local dx,dy=cos(t()*0.5)*4,sin(t()*0.5)*3+dy
 	local x,y=40+dx,40+dy
-	-- local s="\^w\^td\-fu\-fn\-fg\-fe\-fo\-fn\n \|h&\-fp\-fo\-fo\-fl" -- 자간 좁힘
-	-- local s="\^w\^td\-f\|fu\-f\|fn\-f\|fg\-f\|fe\-f\|fo\-f\|fn\n\n    \|h\|c&\-f\|fp\-f\|fo\-f\|fo\-f\|fl" -- 자간 좁힘
 	local s0="\^w\^t,d\-f,u\-f,n\-f,g\-f,e\-f,o\-f,n\n \|h&\-f,p\-f,o\-f,o\-f,l"
 	s0=split(s0)
 	local s=s0[1]
@@ -456,7 +432,6 @@ function draw_title_test(dy)
 	for i=2,#s0 do
 		s..="\|"..(diff[flr((f/8+i)%5+1)])..s0[i]
 	end
-
 
 	-- 그림자
 	do
@@ -482,15 +457,6 @@ function draw_title_test(dy)
 		-- &
 		print("\^w\^t&",x+8,y+12,2)
 		print("\^w\^t&",x+8,y+13,4)
-
-		-- highlight
-		--[[ local p_s="0,-1,7,-1,11,-1,14,-1,21,1,23,-1,28,-1,35,1,37,-1,42,-1,15,12,22,14,24,12,29,14,31,12,36,12" -- 자간 좁힘
-		local p=split(p_s)
-		for i=1,#p,2 do
-			pset(x+p[i],y+p[i+1],15)
-		end
-		pset(x+8,y+12,7)
-		pset(x+8,y+18,7) ]]
 	end
 end
 function draw_title(dy)
@@ -583,6 +549,7 @@ function set_gamestate(to)
 		gg.is_gameover=false
 		gg.is_clear=false
 		gg.use_dim=false
+		add(eff_front,{type="info",eff_timer=180})
 	end
 end
 
@@ -593,7 +560,7 @@ end
 -- 게임
 
 hit_count=0 -- 디버그용
-eff={} -- 출력할 이펙트들
+eff={} eff_front={} -- 출력할 이펙트들
 
 -- 비네팅 강도 16x16으로 설정
 vntt=split("16,16,15,13,11,10,9,9,9,9,10,11,13,15,16,16,16,15,12,10,8,7,6,5,5,6,7,8,10,12,15,16,15,12,10,7,5,3,2,1,1,2,3,5,7,10,12,15,13,10,7,4,2,0,0,0,0,0,0,2,4,7,10,13,11,8,5,2,0,0,0,0,0,0,0,0,2,5,8,11,10,7,3,0,0,0,0,0,0,0,0,0,0,3,7,10,9,6,2,0,0,0,0,0,0,0,0,0,0,2,6,9,9,5,1,0,0,0,0,0,0,0,0,0,0,1,5,9,9,5,1,0,0,0,0,0,0,0,0,0,0,1,5,9,9,6,2,0,0,0,0,0,0,0,0,0,0,2,6,9,10,7,3,0,0,0,0,0,0,0,0,0,0,3,7,10,11,8,5,2,0,0,0,0,0,0,0,0,2,5,8,11,13,10,7,4,2,0,0,0,0,0,0,2,4,7,10,13,15,12,10,7,5,3,2,1,1,2,3,5,7,10,12,15,16,15,12,10,8,7,6,5,5,6,7,8,10,12,15,16,16,16,15,13,11,10,9,9,9,9,10,11,13,15,16,16")
@@ -606,6 +573,10 @@ function gg_reset()
 		is_gameover=false,
 		is_clear=false,
 
+		-- 대기 여부(화면 전환용)
+		is_wait=true,
+		wait_timer=60,
+
 		-- 진행 룸
 		room_no=1,
 		room_no_max=5,
@@ -616,15 +587,33 @@ function gg_reset()
 		-- 플레이 상태
 		remain_heart=5,
 		remain_heart_max=5,
-		remain_kick=12,
-		remain_kick_max=12,
+		remain_kick=20,
+		remain_kick_max=20,
 
 		-- 딤처리
 		use_dim=true,
-		dim_pow=16, -- 1~16
+		dim_pow=16, -- 0~16
+		dim_pow30=30, -- 0~30
 	}
 end
 gg_reset()
+
+-- kick 셋팅
+-- todo: 정리해야하는디...
+function kick_reset()
+	kick=false
+	kick_a=0
+	kick_a_acc=0
+	kick_pow_min=0.6
+	kick_pow_max=3.2
+	kick_pow=kick_pow_max
+	kick_pow_to=kick_pow_max
+end
+kick_reset()
+
+-- 게임오버 테스트
+-- gg.remain_heart=1
+-- gg.remain_kick=1
 
 -- 룸 셋팅
 -- todo: 세팅 간소화
@@ -645,7 +634,6 @@ function set_room(n)
 		add(holes,{x=110,y=64,r=5})
 
 		-- 구슬 여럿 추가
-		-- gg.player_ball={x=20,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true,wait_action=true}
 		gg.player_ball={x=20,y=52,r=5,sx=0,sy=0,hit_c=0,c=colors[1],is_player=true,wait_action=true}
 		add(balls,gg.player_ball) -- 초록 구슬
 		add(balls,{x=64,y=64,r=5,sx=0,sy=0,hit_c=0,c=colors[2],is_boss=true}) -- 주황 구슬
@@ -768,8 +756,8 @@ function set_room(n)
 		add(balls,gg.player_ball) -- 초록 구슬
 		add(balls,{x=16,y=96,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
 		add(balls,{x=16,y=112,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
-		add(balls,{x=32,y=112,r=5,sx=0,sy=0,hit_c=0,c=colors[2],is_boss=true}) -- 주황 구슬
-		add(balls,{x=48,y=112,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=32,y=112,r=5,sx=0,sy=0,hit_c=0,c=colors[3]})
+		add(balls,{x=48,y=112,r=5,sx=0,sy=0,hit_c=0,c=colors[2],is_boss=true}) -- 주황 구슬
 
 		-- 심연 추가
 		add(abysses,{5,5,6,6})
@@ -811,16 +799,10 @@ function _init()
 	cls(c_bg)
 	copyprevframe()
 	set_room(gg.room_no)
-end
 
--- todo: 정리해야하는디...
-kick=false
-kick_a=0
-kick_a_acc=0
-kick_pow_min=0.6
-kick_pow_max=3.2
-kick_pow=kick_pow_max
-kick_pow_to=kick_pow_max
+	-- test
+	-- set_gamestate("clear")
+end
 
 function _update60()
 	f+=1
@@ -863,8 +845,10 @@ function _update60()
 			c.y+=c.sy
 
 			-- 공의 속도가 충분히 느리면 0으로 만들기 + 감속
-			if(c.sx!=0) c.sx=abs(c.sx)<0.05 and 0 or c.sx*0.988
-			if(c.sy!=0) c.sy=abs(c.sy)<0.05 and 0 or c.sy*0.988
+			-- if(c.sx!=0) c.sx=abs(c.sx)<0.02 and 0 or c.sx*0.988
+			-- if(c.sy!=0) c.sy=abs(c.sy)<0.02 and 0 or c.sy*0.988
+			if(c.sx!=0) c.sx=abs(c.sx)<0.02 and 0 or c.sx*0.985
+			if(c.sy!=0) c.sy=abs(c.sy)<0.02 and 0 or c.sy*0.985
 
 			-- 가장 느린 공의 속도 기록
 			slowest_spd=max(max(slowest_spd,abs(c.sx)),abs(c.sy))
@@ -918,8 +902,8 @@ function _update60()
 		else kick=false end
 
 		-- 좌우 키로 각도(각가속도 사용)
-		if btn(0) then kick_a_acc=min(0.012,kick_a_acc+0.0004)
-		elseif btn(1) then kick_a_acc=max(-0.012,kick_a_acc-0.0004)
+			if btn(0) then kick_a_acc=min(0.012,kick_a_acc+(kick_a_acc<0 and 0.002 or 0.0004))
+			elseif btn(1) then kick_a_acc=max(-0.012,kick_a_acc-(kick_a_acc>0 and 0.002 or 0.0004))
 		else kick_a_acc=abs(kick_a_acc)<0.0006 and 0 or kick_a_acc*0.7 end
 		kick_a+=kick_a_acc
 
@@ -932,27 +916,24 @@ function _update60()
 	-- 타이틀 화면이라면? x키 눌러서 게임 시작
 	-- 게임 중이라면 x키 눌러서 타이틀로...
 	if gg.is_title then
-		if gg.dim_pow>=16 and btnp(5) then
+		if gg.dim_pow>=16 and btnp(5) and not gg.is_wait then
 			set_gamestate("play")
 			sfx(8)
 		end
 		
 	elseif gg.is_gameover then
 		if gg.dim_pow>=16 and btnp(5) then
-			-- 죽으면? 하트 남은 게 있으면 다시, 없으면 타이틀로...
-			if gg.remain_heart>1 then
+			-- 죽으면?
+			if gg.remain_heart>1 then -- 하트 남은 게 있으면 방 다시 시작
 				gg.remain_heart-=1
 				gg.remain_kick=gg.remain_kick_max
 				set_room(gg.room_no)
+				kick_reset()
 				set_gamestate("play")
 				sfx(8)
-			else
-				gg.remain_heart=gg.remain_heart_max
-				gg.remain_kick=gg.remain_kick_max
-				gg.room_no=1
-				set_room(1)
-				set_gamestate("title")
-				gg.dim_pow=max(1,gg.dim_pow)
+			elseif not gg.is_wait then -- 하트 없으면 타이틀로 암전하면서 감
+				gg.is_wait=true
+				gg.wait_timer=120
 				sfx(7)
 			end
 		end
@@ -963,6 +944,7 @@ function _update60()
 			gg.room_no=(gg.room_no<gg.room_no_max) and gg.room_no+1 or 1
 			gg.remain_kick=gg.remain_kick_max
 			set_room(gg.room_no)
+			kick_reset()
 			set_gamestate("play")
 			sfx(8)
 		end
@@ -973,6 +955,21 @@ function _update60()
 			gg.dim_pow=max(1,gg.dim_pow)
 			sfx(7)
 		end
+	end
+
+	-- 대기 상태라면? 대기 카운터를 0까지 줄인 후 대기 상태를 끝낸다
+	-- 대기 카운터가 60일 때 게임 상태를 초기화 + title로 바꿈
+	if gg.is_wait then
+		gg.wait_timer-=1
+		if gg.wait_timer==60 then
+			gg.remain_heart=gg.remain_heart_max
+			gg.remain_kick=gg.remain_kick_max
+			gg.room_no=1
+			set_room(1)
+			set_gamestate("title")
+			gg.dim_pow=max(1,gg.dim_pow)
+		end
+		if(gg.wait_timer<=0) gg.is_wait=false
 	end
 
 end
@@ -990,6 +987,9 @@ function _draw()
 		s=sub(s,1,1+gg.dim_pow*2) -- 딤을 순차적으로 적용
 		pal(split(s),0)
 	end
+
+	-- 딤 처리하면서 같이 0~30 사이로 변하는 값(화면 전환 연출용)
+	gg.dim_pow30=gg.use_dim and min(gg.dim_pow30+1,30) or max(gg.dim_pow30-1,0)
 
 	-- 이동 자국
 	-- 이전 프레임의 자국을 붙여넣은 후 배경색 원, 점을 그려서 조금씩 지우는 방식
@@ -1083,7 +1083,7 @@ function _draw()
 	for c in all(balls) do draw_ball(c) end
 
 	-- 이펙트
-	draw_eff()
+	draw_eff(eff)
 
 	-- 박스 다시 그리기(구슬 앞을 가림)
 	palt(0,false) palt(8,true)
@@ -1093,7 +1093,7 @@ function _draw()
 			for j=0,(y2-y1)\8-1 do
 				-- 높이를 불규칙적으로...
 				local d=flr((i+j*1.3)%2)
-				sspr(0,0,12-d,13-d,x1-4+i*8+d,y1-4+j*8+d)
+				sspr(0,0,12-d,12-d,x1-4+i*8+d,y1-4+j*8+d)
 			end
 		end
 	end
@@ -1107,10 +1107,14 @@ function _draw()
 		draw_dot_line(x,y,kick_a,2,12+kick_pow*12)
 	end
 
+	-- 이펙트(앞 레이어)
+	draw_eff(eff_front)
+
 	-- 비네팅(cpu 0.09 먹음 / 동적으로 바꾸면 0.11 먹음)
 	if gg.dim_pow>0 then
 		local offset=abs(t()*5%6-3)
-		local ratio=((16-gg.dim_pow)/16)^3
+		-- local ratio=(gg.dim_pow<=0) and 0 or ((16-gg.dim_pow)/16)^3
+		-- local ratio=(gg.dim_pow30<=0) and 0 or ((30-gg.dim_pow30)/30)^3
 		for i=0,15 do
 			for j=0,15 do
 				local d=vntt[i*16+j+1]
@@ -1127,19 +1131,25 @@ function _draw()
 
 	-- ui 그리기
 	if true then
+		local ratio=(gg.dim_pow30>=30) and 1 or (gg.dim_pow30/30)^2 -- 0 to 1 inCubic
+		local dy=-16*ratio
+
 		palt(0,false) palt(2,true)
+
 		for i=1,gg.remain_heart_max do
 			local ix=2+(i-1)*8
-			sspr(0,32,10,10,ix,2)
-			if(i>gg.remain_heart) spr(67,ix,2)
+			sspr(0,32,10,10,ix,2+dy)
+			if(i>gg.remain_heart) spr(67,ix,2+dy)
 		end
 
-		local x,y=45,1
-		local w=#tostr(gg.remain_kick)*4
+		local x,y=45,1+dy
+		local s=tostr(gg.remain_kick)
+		if(gg.remain_kick<10) s="0"..s
+		w=8
 		sspr(10,32,3,12,x,y)
 		sspr(13,32,1,12,x+3,y,w,12)
 		sspr(14,32,5,12,x+3+w,y)
-		print(gg.remain_kick,x+3,y+3,0)
+		print(s,x+3,y+3,0)
 		
 		palt()
 	end
@@ -1151,27 +1161,27 @@ function _draw()
 	-- 게임오버/클리어/타이틀 화면이라면?
 	if gg.is_gameover or gg.is_clear then
 
-		local ratio=((16-gg.dim_pow)/16)^3 -- 1->0
+		-- local ratio=((16-gg.dim_pow)/16)^3 -- 1->0
+		local ratio=((30-gg.dim_pow30)/30)^3 -- 1->0
 
 		if gg.is_gameover then
 			local d1,d2=cos(t()*0.6)*2,sin(t()*0.6)*2
 
 			-- 남은 하트가 없으면 진짜 게임오버, 있으면 룸 재시작 가능
 
-			local s=gg.remain_heart>1 and "\^i f a i l e d " or "\^i g a m e  o v e r "
+			local s=gg.remain_heart>1 and "\^i  y o u  d i e d  " or "\^i  g a m e  o v e r  "
  			s=sub(s,1,(1-ratio)*#s)
 			local x,y=63-#s*2+5-d1,52-d2+ratio*10
 			printos(s,x,y,8,0,0)
 
 			s=gg.remain_heart>1 and "press ❎ to restart" or "press ❎ to title"
-			-- x,y=26-d2,68+d1-ratio*10
 			x,y=63-#s*2-d2,68+d1-ratio*10
 			printos(s,x,y,7,0,0)
 			print("❎",x+24,y,10)
 
 		else
 			local d1,d2=cos(t()*0.6)*2,sin(t()*0.6)*2
-			local s="\^i room #"..gg.room_no.." clear! "
+			local s="\^i  dungeon room "..gg.room_no.." clear!  "
 			s=sub(s,1,(1-ratio)*#s)
 			local x,y=63-#s*2+5-d1,52-d2+ratio*10
 			printos(s,x,y,10,0,0)
@@ -1183,7 +1193,7 @@ function _draw()
 
 	elseif gg.is_title then
 		
-		local ratio=((16-gg.dim_pow)/16)^3 -- 1->0
+		local ratio=((30-gg.dim_pow30)/30)^3 -- 1->0
 		draw_title(ratio*20)
 
 		-- 글자
@@ -1200,8 +1210,16 @@ function _draw()
 	
 	end
 
+	-- 대기 상태라면? 화면을 전부 검게 만들었다가 다시 밝게 한다
+	if gg.is_wait then
+		local dark_ratio=1-abs(60-gg.wait_timer)/60
+		fillp_step(flr(dark_ratio*19))
+		rectfill(0,0,sw,sh,0)
+		fillp()
+	end
+
 	-- 디버그용
-	print_log() -- debug: log
+	-- print_log() -- debug: log
 	-- draw_color_table()
 	-- if(hit_count>0) stop() -- debug: 일단 멈춰보자...
 end
